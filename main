@@ -1,0 +1,433 @@
+-- Executor-style UI | Toggle with P or the X button
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+LocalPlayer.CharacterAdded:Connect(function(c) Character = c end)
+
+local CONFIG_FILE = "larp_configs.json"
+local TOGGLE_KEY = Enum.KeyCode.P
+
+-- Theme (executor dark style)
+local Theme = {
+    Bg      = Color3.fromRGB(22, 22, 30),
+    Side    = Color3.fromRGB(30, 30, 40),
+    Sec     = Color3.fromRGB(40, 40, 54),
+    Btn     = Color3.fromRGB(50, 50, 68),
+    Acc     = Color3.fromRGB(140, 85, 255),
+    Acc2    = Color3.fromRGB(90, 60, 220),
+    Txt     = Color3.fromRGB(240, 240, 255),
+    TxtD    = Color3.fromRGB(150, 150, 170),
+    Suc     = Color3.fromRGB(60, 200, 120),
+    Err     = Color3.fromRGB(235, 80, 90),
+}
+
+local function Tween(obj, props, time, style, dir)
+    local t = TweenService:Create(obj, TweenInfo.new(time or 0.25, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)
+    t:Play()
+    return t
+end
+
+-- Destroy old instances
+local pg = LocalPlayer:WaitForChild("PlayerGui")
+if pg:FindFirstChild("GivedebtsV13") then pg.GivedebtsV13:Destroy() end
+if pg:FindFirstChild("GivedebtsLarpTool") then pg.GivedebtsLarpTool:Destroy() end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "GivedebtsLarpTool"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = pg
+
+-- Main window
+local Main = Instance.new("Frame")
+Main.Size = UDim2.new(0, 420, 0, 280)
+Main.Position = UDim2.new(0.5, -200, 0.5, -160)
+Main.BackgroundColor3 = Theme.Bg
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+Main.Parent = ScreenGui
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
+
+local MainStroke = Instance.new("UIStroke", Main)
+MainStroke.Thickness = 1
+MainStroke.Color = Theme.Acc
+MainStroke.Transparency = 0.4
+
+-- Animated gradient border
+local Grad = Instance.new("UIGradient", MainStroke)
+Grad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Theme.Acc),
+    ColorSequenceKeypoint.new(0.5, Theme.Acc2),
+    ColorSequenceKeypoint.new(1, Theme.Acc),
+})
+task.spawn(function()
+    while ScreenGui.Parent do
+        Grad.Rotation = (Grad.Rotation + 1) % 360
+        RunService.RenderStepped:Wait()
+    end
+end)
+
+-- Title bar
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 34)
+TitleBar.BackgroundColor3 = Theme.Side
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = Main
+Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 10)
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -50, 1, 0)
+Title.Position = UDim2.new(0, 14, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "snivy  |  larp tool"
+Title.TextColor3 = Theme.Txt
+Title.TextSize = 15
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TitleBar
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 28, 0, 28)
+CloseBtn.Position = UDim2.new(1, -34, 0, 3)
+CloseBtn.BackgroundColor3 = Theme.Err
+CloseBtn.Text = "×"
+CloseBtn.TextColor3 = Theme.Txt
+CloseBtn.TextSize = 16
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = TitleBar
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 8)
+
+-- Tab buttons (top row, executor style)
+local TabHolder = Instance.new("Frame")
+TabHolder.Size = UDim2.new(1, -20, 0, 30)
+TabHolder.Position = UDim2.new(0, 10, 0, 42)
+TabHolder.BackgroundTransparency = 1
+TabHolder.Parent = Main
+
+local tabs = {}
+local function MakeTab(name, order)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1/3, -4, 1, 0)
+    b.Position = UDim2.new((order - 1) / 3, 0, 0, 0)
+    b.BackgroundColor3 = Theme.Btn
+    b.Text = name
+    b.TextColor3 = Theme.TxtD
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 12
+    b.Parent = TabHolder
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+    local st = Instance.new("UIStroke", b)
+    st.Thickness = 1
+    st.Color = Theme.Sec
+    b.MouseEnter:Connect(function() Tween(b, {BackgroundColor3 = Theme.Acc2}, 0.15) end)
+    b.MouseLeave:Connect(function()
+        if not tabs[name].selected then Tween(b, {BackgroundColor3 = Theme.Btn}, 0.15) end
+    end)
+    tabs[name] = {button = b, stroke = st}
+    return b
+end
+
+local TabEquipBtn = MakeTab("EQUIP", 1)
+local TabPresetsBtn = MakeTab("PRESETS", 2)
+local TabExtrasBtn = MakeTab("EXTRAS", 3)
+
+-- Pages
+local function MakePage()
+    local p = Instance.new("Frame")
+    p.Size = UDim2.new(1, -20, 1, -128)
+    p.Position = UDim2.new(0, 10, 0, 78)
+    p.BackgroundTransparency = 1
+    p.Visible = false
+    p.Parent = Main
+    return p
+end
+local PageEquip = MakePage()
+local PagePresets = MakePage()
+local PageExtras = MakePage()
+
+-- Status bar (bottom)
+local Status = Instance.new("TextLabel")
+Status.Size = UDim2.new(1, -20, 0, 22)
+Status.Position = UDim2.new(0, 10, 1, -30)
+Status.BackgroundTransparency = 1
+Status.Text = "Ready."
+Status.TextColor3 = Theme.TxtD
+Status.TextSize = 12
+Status.Font = Enum.Font.GothamMedium
+Status.TextXAlignment = Enum.TextXAlignment.Left
+Status.Parent = Main
+
+-- Button hover/press effect
+local function StyleButton(btn)
+    btn.MouseEnter:Connect(function()
+        Tween(btn, {Size = btn.Size + UDim2.new(0, 4, 0, 4), Position = btn.Position - UDim2.new(0, 2, 0, 2)}, 0.1)
+    end)
+    btn.MouseLeave:Connect(function()
+        Tween(btn, {Size = btn.Size - UDim2.new(0, 4, 0, 4), Position = btn.Position + UDim2.new(0, 2, 0, 2)}, 0.1)
+    end)
+end
+
+local function NewButton(text, parent, size, pos, color)
+    local b = Instance.new("TextButton")
+    b.Size = size
+    b.Position = pos
+    b.BackgroundColor3 = color or Theme.Acc
+    b.Text = text
+    b.TextColor3 = Theme.Txt
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 13
+    b.BorderSizePixel = 0
+    b.Parent = parent
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+    StyleButton(b)
+    return b
+end
+
+-- ===== EQUIP PAGE =====
+local AssetBox = Instance.new("TextBox")
+AssetBox.Size = UDim2.new(1, 0, 0, 38)
+AssetBox.BackgroundColor3 = Theme.Sec
+AssetBox.PlaceholderText = "Enter Asset ID..."
+AssetBox.Text = ""
+AssetBox.TextColor3 = Theme.Txt
+AssetBox.PlaceholderColor3 = Theme.TxtD
+AssetBox.Font = Enum.Font.GothamMedium
+AssetBox.TextSize = 14
+AssetBox.BorderSizePixel = 0
+AssetBox.Parent = PageEquip
+Instance.new("UICorner", AssetBox).CornerRadius = UDim.new(0, 8)
+local abStroke = Instance.new("UIStroke", AssetBox)
+abStroke.Thickness = 1
+abStroke.Color = Theme.Sec
+AssetBox.Focused:Connect(function() Tween(abStroke, {Color = Theme.Acc}, 0.15) end)
+AssetBox.FocusLost:Connect(function() Tween(abStroke, {Color = Theme.Sec}, 0.15) end)
+
+local EquipBtn = NewButton("EQUIP", PageEquip, UDim2.new(1, 0, 0, 38), UDim2.new(0, 0, 0, 50))
+local eqGrad = Instance.new("UIGradient", EquipBtn)
+eqGrad.Color = ColorSequence.new(Theme.Acc, Theme.Acc2)
+
+-- ===== PRESETS PAGE =====
+local NameBox = Instance.new("TextBox")
+NameBox.Size = UDim2.new(0.6, -5, 0, 38)
+NameBox.BackgroundColor3 = Theme.Sec
+NameBox.PlaceholderText = "Preset Name..."
+NameBox.Text = ""
+NameBox.TextColor3 = Theme.Txt
+NameBox.PlaceholderColor3 = Theme.TxtD
+NameBox.Font = Enum.Font.GothamMedium
+NameBox.TextSize = 14
+NameBox.BorderSizePixel = 0
+NameBox.Parent = PagePresets
+Instance.new("UICorner", NameBox).CornerRadius = UDim.new(0, 8)
+
+local SaveBtn = NewButton("SAVE", PagePresets, UDim2.new(0.4, -5, 0, 38), UDim2.new(0.6, 10, 0, 0))
+
+local PresetList = Instance.new("ScrollingFrame")
+PresetList.Size = UDim2.new(1, 0, 1, -50)
+PresetList.Position = UDim2.new(0, 0, 0, 50)
+PresetList.BackgroundTransparency = 1
+PresetList.BorderSizePixel = 0
+PresetList.ScrollBarThickness = 4
+PresetList.Parent = PagePresets
+Instance.new("UIListLayout", PresetList).Padding = UDim.new(0, 6)
+
+-- ===== EXTRAS PAGE =====
+local SyncBtn = NewButton("CLEAR APPEARANCE", PageExtras, UDim2.new(1, 0, 0, 38), UDim2.new(0, 0, 0, 0), Theme.Sec)
+local Info = Instance.new("TextLabel")
+Info.Size = UDim2.new(1, 0, 0, 60)
+Info.Position = UDim2.new(0, 0, 0, 50)
+Info.BackgroundTransparency = 1
+Info.Text = "snivy siap membantu!"
+Info.TextColor3 = Theme.TxtD
+Info.TextSize = 12
+Info.Font = Enum.Font.GothamMedium
+Info.Parent = PageExtras
+
+-- ===== Config load/save =====
+local equippedSession = {}
+
+local function LoadConfig()
+    local has = isfile or function() return false end
+    if has(CONFIG_FILE) then
+        local ok, data = pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
+        if ok and data then return data end
+    end
+    return {}
+end
+
+local function RefreshPresets()
+    for _, c in ipairs(PresetList:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+    local cfg = LoadConfig()
+    for name, ids in pairs(cfg) do
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, 0, 0, 34)
+        row.BackgroundColor3 = Theme.Sec
+        row.BorderSizePixel = 0
+        row.Parent = PresetList
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+        local rl = Instance.new("TextLabel")
+        rl.Size = UDim2.new(0.65, 0, 1, 0)
+        rl.Position = UDim2.new(0, 12, 0, 0)
+        rl.BackgroundTransparency = 1
+        rl.Text = name
+        rl.TextColor3 = Theme.Txt
+        rl.Font = Enum.Font.GothamMedium
+        rl.TextSize = 13
+        rl.TextXAlignment = Enum.TextXAlignment.Left
+        rl.Parent = row
+        local lb = NewButton("LOAD", row, UDim2.new(0.28, 0, 0.7, 0), UDim2.new(0.68, 0, 0.15, 0))
+        lb.MouseButton1Click:Connect(function()
+            for _, id in ipairs(ids) do equip(id, true) end
+            Status.Text = "Loaded: " .. name
+            Status.TextColor3 = Theme.Suc
+        end)
+    end
+end
+
+-- ===== Equip logic =====
+function equip(assetId, silent)
+    Status.Text = "Loading asset..."
+    Status.TextColor3 = Theme.Acc
+    local ok, objects = pcall(function() return game:GetObjects("rbxassetid://" .. assetId) end)
+    if not (ok and objects and #objects > 0) then
+        Status.Text = "Asset failed to load."
+        Status.TextColor3 = Theme.Err
+        return
+    end
+
+    local found
+    local function findWearable(m)
+        for _, ch in ipairs(m:GetChildren()) do
+            if ch:IsA("Accessory") or ch:IsA("Tool") or ch:IsA("Shirt") or ch:IsA("Pants") then
+                found = ch
+                return
+            end
+            findWearable(ch)
+        end
+    end
+    for _, o in ipairs(objects) do
+        if o:IsA("Accessory") or o:IsA("Tool") or o:IsA("Shirt") or o:IsA("Pants") then
+            found = o
+            break
+        end
+        findWearable(o)
+        if found then break end
+    end
+
+    if not found then
+        Status.Text = "Not a wearable object."
+        Status.TextColor3 = Theme.Err
+        return
+    end
+
+    local humanoid = Character:FindFirstChildOfClass("Humanoid")
+    if found:IsA("Accessory") and humanoid then
+        local handle = found:FindFirstChild("Handle")
+        if handle then
+            handle.Transparency = 0
+            handle.CanCollide = false
+            handle.Anchored = false
+        end
+        humanoid:AddAccessory(found)
+        task.delay(0.1, function()
+            if handle and handle.Parent == found then
+                local head = Character:FindFirstChild("Head")
+                if head then
+                    local weld = handle:FindFirstChild("AccessoryWeld") or Instance.new("Weld", handle)
+                    weld.Name = "AccessoryWeld"
+                    weld.Part0 = handle
+                    weld.Part1 = head
+                    local att = handle:FindFirstChildOfClass("Attachment")
+                    local headAtt = att and head:FindFirstChild(att.Name)
+                    if att and headAtt then
+                        weld.C0 = att.CFrame
+                        weld.C1 = headAtt.CFrame
+                    end
+                end
+            end
+        end)
+    elseif found:IsA("Tool") then
+        found.Parent = LocalPlayer.Backpack
+    elseif found:IsA("Shirt") or found:IsA("Pants") then
+        local old = Character:FindFirstChildOfClass(found.ClassName)
+        if old then old:Destroy() end
+        found.Parent = Character
+    end
+
+    if not silent then table.insert(equippedSession, assetId) end
+    Status.Text = "Equipped successfully"
+    Status.TextColor3 = Theme.Suc
+end
+
+-- ===== Wiring =====
+EquipBtn.MouseButton1Click:Connect(function()
+    if AssetBox.Text ~= "" then equip(AssetBox.Text) end
+end)
+
+SaveBtn.MouseButton1Click:Connect(function()
+    if NameBox.Text ~= "" and #equippedSession > 0 then
+        local presetName = NameBox.Text
+        local cfg = LoadConfig()
+        cfg[presetName] = equippedSession
+        if writefile then writefile(CONFIG_FILE, HttpService:JSONEncode(cfg)) end
+        NameBox.Text = ""
+        Status.Text = "Saved: " .. presetName
+        RefreshPresets()
+    else
+        Status.Text = "No items to save!"
+        Status.TextColor3 = Theme.Err
+    end
+end)
+
+SyncBtn.MouseButton1Click:Connect(function()
+    LocalPlayer:ClearCharacterAppearance()
+    Status.Text = "Appearance cleared."
+    Status.TextColor3 = Theme.Suc
+end)
+
+-- ===== Tab switching =====
+local function SelectTab(idx)
+    PageEquip.Visible = idx == 1
+    PagePresets.Visible = idx == 2
+    PageExtras.Visible = idx == 3
+    local order = {TabEquipBtn, TabPresetsBtn, TabExtrasBtn}
+    for i, b in ipairs(order) do
+        local t = tabs[b.Text]
+        t.selected = i == idx
+        b.TextColor3 = (i == idx) and Theme.Txt or Theme.TxtD
+        b.BackgroundColor3 = (i == idx) and Theme.Acc2 or Theme.Btn
+    end
+    if idx == 2 then RefreshPresets() end
+end
+TabEquipBtn.MouseButton1Click:Connect(function() SelectTab(1) end)
+TabPresetsBtn.MouseButton1Click:Connect(function() SelectTab(2) end)
+TabExtrasBtn.MouseButton1Click:Connect(function() SelectTab(3) end)
+
+-- ===== Toggle (P key / X button) =====
+local visible = true
+local function Toggle()
+    visible = not visible
+    if visible then
+        Main.Visible = true
+        Tween(Main, {Position = UDim2.new(0.5, -200, 0.5, -160), BackgroundTransparency = 0}, 0.35, Enum.EasingStyle.Elastic)
+    else
+        local t = Tween(Main, {Position = UDim2.new(0.5, -200, 0.5, 200), BackgroundTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        t.Completed:Connect(function() if not visible then Main.Visible = false end end)
+    end
+end
+UserInputService.InputBegan:Connect(function(input, processed)
+    if not processed and input.KeyCode == TOGGLE_KEY then Toggle() end
+end)
+CloseBtn.MouseButton1Click:Connect(Toggle)
+
+SelectTab(1)
+RefreshPresets()
+print("larpgxng Loaded (clean).")
