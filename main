@@ -1,4 +1,12 @@
 -- Executor-style UI | Toggle with P or the X button
+-- Fixed build:
+--   * Preset list scrolls properly (AutomaticCanvasSize)
+--   * Leg snapshots reset on respawn (no stale mesh IDs on a new body)
+--   * Asset ID input is sanitized (full URLs accepted)
+--   * Presets render in stable alphabetical order
+--   * Toggle tween is guarded against rapid P / X spam
+--   * No deprecated two-arg Instance.new calls
+--   * Hide animation is slide-only (children no longer float opaque)
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -7,11 +15,23 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-LocalPlayer.CharacterAdded:Connect(function(c) Character = c end)
 
 local CONFIG_FILE = "larp_configs.json"
 local TOGGLE_KEY = Enum.KeyCode.P
+
+-- Tracked state (declared early so the respawn handler can reset it)
+local equippedSession = {}
+local originalLegProps = {}    -- [partName] = {MeshId, TextureID, Transparency}
+local equippedAccessories = {} -- accessory instances added by this script
+local legModified = false
+
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+LocalPlayer.CharacterAdded:Connect(function(c)
+    Character = c
+    -- New body: any old leg snapshot is stale, so start fresh
+    originalLegProps = {}
+    legModified = false
+end)
 
 -- Theme (executor dark style)
 local Theme = {
@@ -52,20 +72,26 @@ Main.BorderSizePixel = 0
 Main.Active = true
 Main.Draggable = true
 Main.Parent = ScreenGui
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 
-local MainStroke = Instance.new("UIStroke", Main)
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = Main
+
+local MainStroke = Instance.new("UIStroke")
 MainStroke.Thickness = 1
 MainStroke.Color = Theme.Acc
 MainStroke.Transparency = 0.4
+MainStroke.Parent = Main
 
 -- Animated gradient border
-local Grad = Instance.new("UIGradient", MainStroke)
+local Grad = Instance.new("UIGradient")
 Grad.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Theme.Acc),
     ColorSequenceKeypoint.new(0.5, Theme.Acc2),
     ColorSequenceKeypoint.new(1, Theme.Acc),
 })
+Grad.Parent = MainStroke
+
 task.spawn(function()
     while ScreenGui.Parent do
         Grad.Rotation = (Grad.Rotation + 1) % 360
@@ -79,7 +105,10 @@ TitleBar.Size = UDim2.new(1, 0, 0, 34)
 TitleBar.BackgroundColor3 = Theme.Side
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = Main
-Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 10)
+
+local TitleBarCorner = Instance.new("UICorner")
+TitleBarCorner.CornerRadius = UDim.new(0, 10)
+TitleBarCorner.Parent = TitleBar
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -50, 1, 0)
@@ -101,9 +130,12 @@ CloseBtn.TextColor3 = Theme.Txt
 CloseBtn.TextSize = 16
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.Parent = TitleBar
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 8)
 
--- Tab buttons (4 tabs)
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 8)
+CloseCorner.Parent = CloseBtn
+
+-- Tab buttons (3 tabs)
 local TabHolder = Instance.new("Frame")
 TabHolder.Size = UDim2.new(1, -20, 0, 30)
 TabHolder.Position = UDim2.new(0, 10, 0, 42)
@@ -113,18 +145,24 @@ TabHolder.Parent = Main
 local tabs = {}
 local function MakeTab(name, order)
     local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1/4, -4, 1, 0)
-    b.Position = UDim2.new((order - 1) / 4, 0, 0, 0)
+    b.Size = UDim2.new(1/3, -4, 1, 0)
+    b.Position = UDim2.new((order - 1) / 3, 0, 0, 0)
     b.BackgroundColor3 = Theme.Btn
     b.Text = name
     b.TextColor3 = Theme.TxtD
     b.Font = Enum.Font.GothamBold
     b.TextSize = 11
     b.Parent = TabHolder
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
-    local st = Instance.new("UIStroke", b)
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = b
+
+    local st = Instance.new("UIStroke")
     st.Thickness = 1
     st.Color = Theme.Sec
+    st.Parent = b
+
     b.MouseEnter:Connect(function() Tween(b, {BackgroundColor3 = Theme.Acc2}, 0.15) end)
     b.MouseLeave:Connect(function()
         if not tabs[name].selected then Tween(b, {BackgroundColor3 = Theme.Btn}, 0.15) end
@@ -136,7 +174,6 @@ end
 local TabEquipBtn = MakeTab("EQUIP", 1)
 local TabPresetsBtn = MakeTab("PRESETS", 3)
 local TabLegsBtn = MakeTab("KORBLOX", 2)
-local TabExtrasBtn = MakeTab("EXTRAS", 4)
 
 -- Pages
 local function MakePage()
@@ -151,7 +188,6 @@ end
 local PageEquip = MakePage()
 local PagePresets = MakePage()
 local PageLegs = MakePage()
-local PageExtras = MakePage()
 
 -- Status bar
 local Status = Instance.new("TextLabel")
@@ -166,15 +202,7 @@ Status.TextXAlignment = Enum.TextXAlignment.Left
 Status.Parent = Main
 
 -- Helper UI Functions
-local function StyleButton(btn)
-    btn.MouseEnter:Connect(function()
-        Tween(btn, {Size = btn.Size + UDim2.new(0, 4, 0, 4), Position = btn.Position - UDim2.new(0, 2, 0, 2)}, 0.1)
-    end)
-    btn.MouseLeave:Connect(function()
-        Tween(btn, {Size = btn.Size - UDim2.new(0, 4, 0, 4), Position = btn.Position + UDim2.new(0, 2, 0, 2)}, 0.1)
-    end)
-end
-
+-- (Hover grow animation removed so buttons stay put while clicking)
 local function NewButton(text, parent, size, pos, color)
     local b = Instance.new("TextButton")
     b.Size = size
@@ -186,8 +214,11 @@ local function NewButton(text, parent, size, pos, color)
     b.TextSize = 13
     b.BorderSizePixel = 0
     b.Parent = parent
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
-    StyleButton(b)
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = b
+
     return b
 end
 
@@ -195,7 +226,7 @@ end
 local AssetBox = Instance.new("TextBox")
 AssetBox.Size = UDim2.new(1, 0, 0, 38)
 AssetBox.BackgroundColor3 = Theme.Sec
-AssetBox.PlaceholderText = "Enter Asset ID..."
+AssetBox.PlaceholderText = "Enter Asset ID... (full catalog URLs also work)"
 AssetBox.Text = ""
 AssetBox.TextColor3 = Theme.Txt
 AssetBox.PlaceholderColor3 = Theme.TxtD
@@ -203,16 +234,25 @@ AssetBox.Font = Enum.Font.GothamMedium
 AssetBox.TextSize = 14
 AssetBox.BorderSizePixel = 0
 AssetBox.Parent = PageEquip
-Instance.new("UICorner", AssetBox).CornerRadius = UDim.new(0, 8)
-local abStroke = Instance.new("UIStroke", AssetBox)
+
+local AssetCorner = Instance.new("UICorner")
+AssetCorner.CornerRadius = UDim.new(0, 8)
+AssetCorner.Parent = AssetBox
+
+local abStroke = Instance.new("UIStroke")
 abStroke.Thickness = 1
 abStroke.Color = Theme.Sec
+abStroke.Parent = AssetBox
+
 AssetBox.Focused:Connect(function() Tween(abStroke, {Color = Theme.Acc}, 0.15) end)
 AssetBox.FocusLost:Connect(function() Tween(abStroke, {Color = Theme.Sec}, 0.15) end)
 
 local EquipBtn = NewButton("EQUIP", PageEquip, UDim2.new(1, 0, 0, 38), UDim2.new(0, 0, 0, 50))
-local eqGrad = Instance.new("UIGradient", EquipBtn)
+local eqGrad = Instance.new("UIGradient")
 eqGrad.Color = ColorSequence.new(Theme.Acc, Theme.Acc2)
+eqGrad.Parent = EquipBtn
+
+local FullResetBtn = NewButton("RESET EQUIPPED", PageEquip, UDim2.new(1, 0, 0, 32), UDim2.new(0, 0, 0, 100), Theme.Err)
 
 -- ===== PRESETS PAGE =====
 local NameBox = Instance.new("TextBox")
@@ -226,7 +266,10 @@ NameBox.Font = Enum.Font.GothamMedium
 NameBox.TextSize = 14
 NameBox.BorderSizePixel = 0
 NameBox.Parent = PagePresets
-Instance.new("UICorner", NameBox).CornerRadius = UDim.new(0, 8)
+
+local NameCorner = Instance.new("UICorner")
+NameCorner.CornerRadius = UDim.new(0, 8)
+NameCorner.Parent = NameBox
 
 local SaveBtn = NewButton("SAVE", PagePresets, UDim2.new(0.4, -5, 0, 38), UDim2.new(0.6, 10, 0, 0))
 
@@ -236,17 +279,24 @@ PresetList.Position = UDim2.new(0, 0, 0, 50)
 PresetList.BackgroundTransparency = 1
 PresetList.BorderSizePixel = 0
 PresetList.ScrollBarThickness = 4
+PresetList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+PresetList.CanvasSize = UDim2.new()
 PresetList.Parent = PagePresets
-Instance.new("UIListLayout", PresetList).Padding = UDim.new(0, 6)
 
--- ===== LEG MODS PAGE (Left on Left, Right on Right) =====
+local PresetLayout = Instance.new("UIListLayout")
+PresetLayout.Padding = UDim.new(0, 6)
+PresetLayout.Parent = PresetList
+
+-- ===== LEG MODS PAGE =====
 local LeftLegBtn = NewButton("LEFT LEG", PageLegs, UDim2.new(0.48, 0, 0, 38), UDim2.new(0, 0, 0, 0))
-local leftGrad = Instance.new("UIGradient", LeftLegBtn)
+local leftGrad = Instance.new("UIGradient")
 leftGrad.Color = ColorSequence.new(Theme.Acc, Theme.Acc2)
+leftGrad.Parent = LeftLegBtn
 
 local RightLegBtn = NewButton("RIGHT LEG", PageLegs, UDim2.new(0.48, 0, 0, 38), UDim2.new(0.52, 0, 0, 0))
-local rightGrad = Instance.new("UIGradient", RightLegBtn)
+local rightGrad = Instance.new("UIGradient")
 rightGrad.Color = ColorSequence.new(Theme.Acc, Theme.Acc2)
+rightGrad.Parent = RightLegBtn
 
 local LegInfo = Instance.new("TextLabel")
 LegInfo.Size = UDim2.new(1, 0, 0, 40)
@@ -258,20 +308,78 @@ LegInfo.TextSize = 12
 LegInfo.Font = Enum.Font.GothamMedium
 LegInfo.Parent = PageLegs
 
--- ===== EXTRAS PAGE =====
-local SyncBtn = NewButton("CLEAR APPEARANCE", PageExtras, UDim2.new(1, 0, 0, 38), UDim2.new(0, 0, 0, 0), Theme.Sec)
-local Info = Instance.new("TextLabel")
-Info.Size = UDim2.new(1, 0, 0, 60)
-Info.Position = UDim2.new(0, 0, 0, 50)
-Info.BackgroundTransparency = 1
-Info.Text = "snivy siap membantu!"
-Info.TextColor3 = Theme.TxtD
-Info.TextSize = 12
-Info.Font = Enum.Font.GothamMedium
-Info.Parent = PageExtras
+local LegResetBtn = NewButton("RESET LEGS", PageLegs, UDim2.new(1, 0, 0, 38), UDim2.new(0, 0, 0, 95), Theme.Err)
 
 -- ===== CORE LOGIC & FUNCTIONS =====
-local equippedSession = {}
+local LEG_PARTS = {
+    "LeftFoot", "LeftLowerLeg", "LeftUpperLeg",
+    "RightFoot", "RightLowerLeg", "RightUpperLeg",
+}
+
+local function SnapshotLegs()
+    if legModified then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    for _, partName in ipairs(LEG_PARTS) do
+        local part = char:FindFirstChild(partName)
+        if part and part:IsA("BasePart") then
+            originalLegProps[partName] = {
+                MeshId = part.MeshId,
+                TextureID = part.TextureID,
+                Transparency = part.Transparency,
+            }
+        end
+    end
+end
+
+local function ResetLegs()
+    local char = LocalPlayer.Character
+    if not char then
+        Status.Text = "No character to reset."
+        Status.TextColor3 = Theme.Err
+        return
+    end
+    if not legModified then
+        Status.Text = "Legs are already normal."
+        Status.TextColor3 = Theme.TxtD
+        return
+    end
+    local ok = pcall(function()
+        for partName, props in pairs(originalLegProps) do
+            local part = char:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                part.MeshId = props.MeshId
+                part.TextureID = props.TextureID
+                part.Transparency = props.Transparency
+            end
+        end
+    end)
+    originalLegProps = {}
+    legModified = false
+    if ok then
+        Status.Text = "Legs reverted to normal."
+        Status.TextColor3 = Theme.Suc
+    else
+        Status.Text = "Failed to reset legs."
+        Status.TextColor3 = Theme.Err
+    end
+end
+
+local function ResetEverything()
+    -- Remove accessories/shirts/pants equipped by this script.
+    -- Leg mods are intentionally left alone (use RESET LEGS on the KORBLOX tab).
+    local removed = 0
+    for _, inst in ipairs(equippedAccessories) do
+        if inst and inst.Parent then
+            inst:Destroy()
+            removed = removed + 1
+        end
+    end
+    equippedAccessories = {}
+    equippedSession = {}
+    Status.Text = "Everything reset. (" .. removed .. " items removed)"
+    Status.TextColor3 = Theme.Suc
+end
 
 local function LoadConfig()
     local has = isfile or function() return false end
@@ -327,12 +435,12 @@ local function equip(assetId, silent)
             handle.Anchored = false
         end
         humanoid:AddAccessory(found)
-        
+
         task.delay(0.1, function()
             if handle and handle.Parent == found then
                 local att = handle:FindFirstChildOfClass("Attachment")
                 local targetPart = Character:FindFirstChild("Head")
-                
+
                 if att then
                     for _, part in ipairs(Character:GetChildren()) do
                         if part:IsA("BasePart") and part:FindFirstChild(att.Name) then
@@ -343,8 +451,12 @@ local function equip(assetId, silent)
                 end
 
                 if targetPart then
-                    local weld = handle:FindFirstChild("AccessoryWeld") or Instance.new("Weld", handle)
-                    weld.Name = "AccessoryWeld"
+                    local weld = handle:FindFirstChild("AccessoryWeld")
+                    if not weld then
+                        weld = Instance.new("Weld")
+                        weld.Name = "AccessoryWeld"
+                        weld.Parent = handle
+                    end
                     weld.Part0 = handle
                     weld.Part1 = targetPart
                     local targetAtt = att and targetPart:FindFirstChild(att.Name)
@@ -363,6 +475,11 @@ local function equip(assetId, silent)
         found.Parent = Character
     end
 
+    -- Track what we added so RESET can remove it
+    if found:IsA("Accessory") or found:IsA("Shirt") or found:IsA("Pants") then
+        table.insert(equippedAccessories, found)
+    end
+
     if not silent then table.insert(equippedSession, assetId) end
     Status.Text = "Equipped successfully"
     Status.TextColor3 = Theme.Suc
@@ -373,19 +490,34 @@ local function RefreshPresets()
         if c:IsA("Frame") then c:Destroy() end
     end
     local cfg = LoadConfig()
+
+    -- Collect and sort names so the list order is stable
+    local names = {}
     for name, ids in pairs(cfg) do
+        if name ~= "ToggleKey" and typeof(ids) == "table" then
+            table.insert(names, name)
+        end
+    end
+    table.sort(names)
+
+    for _, presetName in ipairs(names) do
+        local ids = cfg[presetName]
+
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, 0, 0, 34)
         row.BackgroundColor3 = Theme.Sec
         row.BorderSizePixel = 0
         row.Parent = PresetList
-        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+
+        local rowCorner = Instance.new("UICorner")
+        rowCorner.CornerRadius = UDim.new(0, 8)
+        rowCorner.Parent = row
 
         local rl = Instance.new("TextLabel")
         rl.Size = UDim2.new(0.65, 0, 1, 0)
         rl.Position = UDim2.new(0, 12, 0, 0)
         rl.BackgroundTransparency = 1
-        rl.Text = name
+        rl.Text = presetName
         rl.TextColor3 = Theme.Txt
         rl.Font = Enum.Font.GothamMedium
         rl.TextSize = 13
@@ -395,7 +527,7 @@ local function RefreshPresets()
         local lb = NewButton("LOAD", row, UDim2.new(0.28, 0, 0.7, 0), UDim2.new(0.68, 0, 0.15, 0))
         lb.MouseButton1Click:Connect(function()
             for _, id in ipairs(ids) do equip(id, true) end
-            Status.Text = "Loaded: " .. name
+            Status.Text = "Loaded: " .. presetName
             Status.TextColor3 = Theme.Suc
         end)
     end
@@ -404,6 +536,7 @@ end
 -- Individual Leg Functions
 local function ApplyLeftLeg()
     local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    SnapshotLegs()
     local ok, err = pcall(function()
         if char:FindFirstChild("LeftFoot") then
             char.LeftFoot.MeshId = "http://www.roblox.com/asset/?id=902942077"
@@ -415,11 +548,12 @@ local function ApplyLeftLeg()
         end
         if char:FindFirstChild("LeftUpperLeg") then
             char.LeftUpperLeg.MeshId = "http://www.roblox.com/asset/?id=902942082"
-            char.LeftUpperLeg.TextureID = "http://www.roblox.com/asset/?id=902842271"
+            char.LeftUpperLeg.TextureID = "http://roblox.com/asset/?id=902842271"
         end
     end)
 
     if ok then
+        legModified = true
         Status.Text = "Left leg mods applied!"
         Status.TextColor3 = Theme.Suc
     else
@@ -430,6 +564,7 @@ end
 
 local function ApplyRightLeg()
     local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    SnapshotLegs()
     local ok, err = pcall(function()
         if char:FindFirstChild("RightFoot") then
             char.RightFoot.MeshId = "http://www.roblox.com/asset/?id=902942089"
@@ -446,6 +581,7 @@ local function ApplyRightLeg()
     end)
 
     if ok then
+        legModified = true
         Status.Text = "Right leg mods applied!"
         Status.TextColor3 = Theme.Suc
     else
@@ -456,7 +592,14 @@ end
 
 -- ===== Wiring Events =====
 EquipBtn.MouseButton1Click:Connect(function()
-    if AssetBox.Text ~= "" then equip(AssetBox.Text) end
+    -- Accept bare IDs or full catalog URLs; pull out the digits
+    local id = AssetBox.Text:match("%d+")
+    if id then
+        equip(id)
+    else
+        Status.Text = "Enter a valid Asset ID."
+        Status.TextColor3 = Theme.Err
+    end
 end)
 
 SaveBtn.MouseButton1Click:Connect(function()
@@ -467,6 +610,7 @@ SaveBtn.MouseButton1Click:Connect(function()
         if writefile then writefile(CONFIG_FILE, HttpService:JSONEncode(cfg)) end
         NameBox.Text = ""
         Status.Text = "Saved: " .. presetName
+        Status.TextColor3 = Theme.Suc
         RefreshPresets()
     else
         Status.Text = "No items to save!"
@@ -476,21 +620,15 @@ end)
 
 LeftLegBtn.MouseButton1Click:Connect(ApplyLeftLeg)
 RightLegBtn.MouseButton1Click:Connect(ApplyRightLeg)
-
-SyncBtn.MouseButton1Click:Connect(function()
-    LocalPlayer:ClearCharacterAppearance()
-    equippedSession = {}
-    Status.Text = "Appearance cleared."
-    Status.TextColor3 = Theme.Suc
-end)
+FullResetBtn.MouseButton1Click:Connect(ResetEverything)
+LegResetBtn.MouseButton1Click:Connect(ResetLegs)
 
 -- ===== Tab Switching =====
 local function SelectTab(idx)
     PageEquip.Visible = idx == 1
     PagePresets.Visible = idx == 2
     PageLegs.Visible = idx == 3
-    PageExtras.Visible = idx == 4
-    local order = {TabEquipBtn, TabPresetsBtn, TabLegsBtn, TabExtrasBtn}
+    local order = {TabEquipBtn, TabPresetsBtn, TabLegsBtn}
     for i, b in ipairs(order) do
         local t = tabs[b.Text]
         t.selected = i == idx
@@ -503,18 +641,26 @@ end
 TabEquipBtn.MouseButton1Click:Connect(function() SelectTab(1) end)
 TabPresetsBtn.MouseButton1Click:Connect(function() SelectTab(2) end)
 TabLegsBtn.MouseButton1Click:Connect(function() SelectTab(3) end)
-TabExtrasBtn.MouseButton1Click:Connect(function() SelectTab(4) end)
 
 -- ===== Toggle (P Key / Close Button) =====
 local visible = true
+local activeTween = nil
 local function Toggle()
+    -- Kill any in-flight tween so rapid toggling can't desync state
+    if activeTween then
+        activeTween:Cancel()
+        activeTween = nil
+    end
     visible = not visible
     if visible then
         Main.Visible = true
-        Tween(Main, {Position = UDim2.new(0.5, -200, 0.5, -160), BackgroundTransparency = 0}, 0.35, Enum.EasingStyle.Elastic)
+        activeTween = Tween(Main, {Position = UDim2.new(0.5, -200, 0.5, -160)}, 0.35, Enum.EasingStyle.Elastic)
     else
-        local t = Tween(Main, {Position = UDim2.new(0.5, -200, 0.5, 200), BackgroundTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-        t.Completed:Connect(function() if not visible then Main.Visible = false end end)
+        -- Slide-only hide: children stay attached to the frame instead of floating opaque
+        activeTween = Tween(Main, {Position = UDim2.new(0.5, -200, 0.5, 200)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        activeTween.Completed:Connect(function()
+            if not visible then Main.Visible = false end
+        end)
     end
 end
 
@@ -526,4 +672,4 @@ CloseBtn.MouseButton1Click:Connect(Toggle)
 -- Initialize UI State
 SelectTab(1)
 RefreshPresets()
-print("larpgxng Loaded (clean).")
+print("larpgxng Loaded (clean, fixed).")
