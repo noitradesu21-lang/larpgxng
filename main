@@ -7,6 +7,7 @@
 --   * Toggle tween is guarded against rapid P / X spam
 --   * No deprecated two-arg Instance.new calls
 --   * Hide animation is slide-only (children no longer float opaque)
+--   * Black & white glass theme (translucent panels, monochrome accents)
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -33,18 +34,24 @@ LocalPlayer.CharacterAdded:Connect(function(c)
     legModified = false
 end)
 
--- Theme (executor dark style)
+-- Theme (black & white glass)
 local Theme = {
-    Bg      = Color3.fromRGB(22, 22, 30),
-    Side    = Color3.fromRGB(30, 30, 40),
-    Sec     = Color3.fromRGB(40, 40, 54),
-    Btn     = Color3.fromRGB(50, 50, 68),
-    Acc     = Color3.fromRGB(140, 85, 255),
-    Acc2    = Color3.fromRGB(90, 60, 220),
-    Txt     = Color3.fromRGB(240, 240, 255),
-    TxtD    = Color3.fromRGB(150, 150, 170),
-    Suc     = Color3.fromRGB(60, 200, 120),
-    Err     = Color3.fromRGB(235, 80, 90),
+    Bg      = Color3.fromRGB(10, 10, 12),
+    Side    = Color3.fromRGB(16, 16, 18),
+    Sec     = Color3.fromRGB(26, 26, 28),
+    Btn     = Color3.fromRGB(34, 34, 36),
+    Acc     = Color3.fromRGB(245, 245, 245),
+    Acc2    = Color3.fromRGB(150, 150, 155),
+    Txt     = Color3.fromRGB(255, 255, 255),
+    TxtD    = Color3.fromRGB(155, 155, 160),
+    Suc     = Color3.fromRGB(235, 235, 235),
+    Err     = Color3.fromRGB(215, 215, 215),
+    -- Per-element transparency for the glassy look
+    TMain   = 0.25,
+    TBar    = 0.15,
+    TField  = 0.25,
+    TBtn    = 0.15,
+    TRow    = 0.30,
 }
 
 local function Tween(obj, props, time, style, dir)
@@ -68,6 +75,7 @@ local Main = Instance.new("Frame")
 Main.Size = UDim2.new(0, 420, 0, 280)
 Main.Position = UDim2.new(0.5, -200, 0.5, -160)
 Main.BackgroundColor3 = Theme.Bg
+Main.BackgroundTransparency = Theme.TMain
 Main.BorderSizePixel = 0
 Main.Active = true
 Main.Draggable = true
@@ -80,7 +88,7 @@ MainCorner.Parent = Main
 local MainStroke = Instance.new("UIStroke")
 MainStroke.Thickness = 1
 MainStroke.Color = Theme.Acc
-MainStroke.Transparency = 0.4
+MainStroke.Transparency = 0.25
 MainStroke.Parent = Main
 
 -- Animated gradient border
@@ -103,6 +111,7 @@ end)
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 34)
 TitleBar.BackgroundColor3 = Theme.Side
+TitleBar.BackgroundTransparency = Theme.TBar
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = Main
 
@@ -125,8 +134,9 @@ local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 28, 0, 28)
 CloseBtn.Position = UDim2.new(1, -34, 0, 3)
 CloseBtn.BackgroundColor3 = Theme.Err
-CloseBtn.Text = "×"
-CloseBtn.TextColor3 = Theme.Txt
+CloseBtn.BackgroundTransparency = Theme.TBtn
+CloseBtn.Text = "-"
+CloseBtn.TextColor3 = Color3.fromRGB(15, 15, 18)
 CloseBtn.TextSize = 16
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.Parent = TitleBar
@@ -148,6 +158,7 @@ local function MakeTab(name, order)
     b.Size = UDim2.new(1/3, -4, 1, 0)
     b.Position = UDim2.new((order - 1) / 3, 0, 0, 0)
     b.BackgroundColor3 = Theme.Btn
+    b.BackgroundTransparency = Theme.TBtn
     b.Text = name
     b.TextColor3 = Theme.TxtD
     b.Font = Enum.Font.GothamBold
@@ -207,9 +218,12 @@ local function NewButton(text, parent, size, pos, color)
     local b = Instance.new("TextButton")
     b.Size = size
     b.Position = pos
-    b.BackgroundColor3 = color or Theme.Acc
+    local bg = color or Theme.Acc
+    b.BackgroundColor3 = bg
+    b.BackgroundTransparency = Theme.TBtn
     b.Text = text
-    b.TextColor3 = Theme.Txt
+    -- Dark text on light (white) buttons, white text on dark ones
+    b.TextColor3 = (bg.R + bg.G + bg.B) > 1.5 and Color3.fromRGB(15, 15, 18) or Theme.Txt
     b.Font = Enum.Font.GothamBold
     b.TextSize = 13
     b.BorderSizePixel = 0
@@ -226,6 +240,7 @@ end
 local AssetBox = Instance.new("TextBox")
 AssetBox.Size = UDim2.new(1, 0, 0, 38)
 AssetBox.BackgroundColor3 = Theme.Sec
+AssetBox.BackgroundTransparency = Theme.TField
 AssetBox.PlaceholderText = "Enter Asset ID... (full catalog URLs also work)"
 AssetBox.Text = ""
 AssetBox.TextColor3 = Theme.Txt
@@ -258,6 +273,7 @@ local FullResetBtn = NewButton("RESET EQUIPPED", PageEquip, UDim2.new(1, 0, 0, 3
 local NameBox = Instance.new("TextBox")
 NameBox.Size = UDim2.new(0.6, -5, 0, 38)
 NameBox.BackgroundColor3 = Theme.Sec
+NameBox.BackgroundTransparency = Theme.TField
 NameBox.PlaceholderText = "Preset Name..."
 NameBox.Text = ""
 NameBox.TextColor3 = Theme.Txt
@@ -505,7 +521,8 @@ local function RefreshPresets()
 
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, 0, 0, 34)
-        row.BackgroundColor3 = Theme.Sec
+        row.BackgroundColor3 = Theme.Btn
+        row.BackgroundTransparency = Theme.TRow
         row.BorderSizePixel = 0
         row.Parent = PresetList
 
