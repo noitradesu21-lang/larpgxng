@@ -1,0 +1,2566 @@
+--[[
+     Universal Cosmetic Swapper v4.1 - Clean Deobfuscated Implementation
+    Unified Emote & Unusual Changer with Complete Wiki Catalog (450+ Items)
+    Based on:
+      - https://evade.fandom.com/wiki/Emotes
+      - https://evade.fandom.com/wiki/Unusuals
+    Reconstructed from recovered bytecode & AST.
+    No obfuscation, no security locks, 100% native Roblox Luau.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Initialize Unified Globals
+getgenv().CosmeticBackups = getgenv().CosmeticBackups or { Emotes = {}, Unusuals = {} }
+getgenv()._CosmeticConnections = getgenv()._CosmeticConnections or {}
+
+-- Compatibility references
+getgenv().EmoteBackups = getgenv().CosmeticBackups.Emotes
+getgenv().UnusualBackups = getgenv().CosmeticBackups.Unusuals
+
+-- Disconnect any existing listeners
+if getgenv()._Connections then
+    for _, conn in ipairs(getgenv()._Connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    table.clear(getgenv()._Connections)
+end
+if getgenv()._UnusualConnections then
+    for _, conn in ipairs(getgenv()._UnusualConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    table.clear(getgenv()._UnusualConnections)
+end
+for _, conn in ipairs(getgenv()._CosmeticConnections) do
+    pcall(function() conn:Disconnect() end)
+end
+table.clear(getgenv()._CosmeticConnections)
+
+--------------------------------------------------------------------------------
+-- WIKI DATABASE: EMOTES (212 items) & UNUSUALS (247 items)
+--------------------------------------------------------------------------------
+local WIKI_EMOTES = {
+    { Name = "Clap", Category = "Store", Moveable = false, Price = "150" },
+    { Name = "Sit", Category = "Store", Moveable = false, Price = "150" },
+    { Name = "Carlton", Category = "Store", Moveable = false, Price = "200" },
+    { Name = "Facepalm", Category = "Store", Moveable = false, Price = "200" },
+    { Name = "Sleep", Category = "Store", Moveable = false, Price = "250" },
+    { Name = "Caramelldansen", Category = "Store", Moveable = false, Price = "350" },
+    { Name = "Pon Pon", Category = "Store", Moveable = false, Price = "350" },
+    { Name = "Epicaricacy", Category = "Store", Moveable = false, Price = "400" },
+    { Name = "Stride", Category = "Store", Moveable = true, Price = "400" },
+    { Name = "Crouch Dance", Category = "Store", Moveable = false, Price = "400" },
+    { Name = "Smug Dance", Category = "Store", Moveable = true, Price = "450" },
+    { Name = "Addendum", Category = "Store", Moveable = false, Price = "500" },
+    { Name = "Swag Walk", Category = "Store", Moveable = true, Price = "500" },
+    { Name = "Heaventaker", Category = "Store", Moveable = true, Price = "500" },
+    { Name = "Texas Style", Category = "Store", Moveable = false, Price = "600" },
+    { Name = "Aerobics", Category = "Store", Moveable = true, Price = "750" },
+    { Name = "Slavic Dance", Category = "Store", Moveable = true, Price = "800" },
+    { Name = "Rambunctious", Category = "Store", Moveable = true, Price = "800" },
+    { Name = "Nostalgia", Category = "Store", Moveable = true, Price = "800" },
+    { Name = "Little Jiggy", Category = "Store", Moveable = false, Price = "800" },
+    { Name = "Gyrating", Category = "Store", Moveable = false, Price = "1200" },
+    { Name = "You're Hired", Category = "Store", Moveable = false, Price = "1200" },
+    { Name = "Catdown", Category = "Store", Moveable = false, Price = "1200" },
+    { Name = "Penguin Dance", Category = "Store", Moveable = true, Price = "1500" },
+    { Name = "PBJT", Category = "Store", Moveable = true, Price = "1500" },
+    { Name = "Bumper Kart", Category = "Store", Moveable = true, Price = "2000" },
+    { Name = "Distraction", Category = "Store", Moveable = false, Price = "2000" },
+    { Name = "Breakdown", Category = "Store", Moveable = false, Price = "3000" },
+    { Name = "act dance", Category = "Store", Moveable = false, Price = "3000" },
+    { Name = "Crabby", Category = "Store", Moveable = true, Price = "3000" },
+    { Name = "Zen Serenity", Category = "Store", Moveable = false, Price = "4000" },
+    { Name = "California Girls", Category = "Store", Moveable = true, Price = "5000" },
+    { Name = "Freestyle", Category = "Store", Moveable = true, Price = "5000" },
+    { Name = "Bold March", Category = "Store", Moveable = true, Price = "10000" },
+    { Name = "Goofy Stride", Category = "Store", Moveable = true, Price = "2000" },
+    { Name = "Flexing", Category = "Store", Moveable = false, Price = "2000" },
+    { Name = "Conga", Category = "Store", Moveable = true, Price = "1000" },
+    { Name = "Infectious", Category = "Store", Moveable = true, Price = "2500" },
+    { Name = "Catjam", Category = "Store", Moveable = true, Price = "40" },
+    { Name = "Stealthy Box", Category = "Store", Moveable = true, Price = "10000" },
+    { Name = "Galactic Bound", Category = "Store", Moveable = true, Price = "10000" },
+    { Name = "Banger", Category = "Store", Moveable = true, Price = "8000" },
+    { Name = "Touch Grass", Category = "Store", Moveable = false, Price = "15000" },
+    { Name = "Writhing", Category = "Store", Moveable = false, Price = "50000" },
+    { Name = "Outlaw", Category = "Store", Moveable = true, Price = "10000" },
+    { Name = "Gaming Time", Category = "Store", Moveable = false, Price = "20000" },
+    { Name = "Helios Chariot", Category = "Store", Moveable = true, Price = "40000" },
+    { Name = "Moonwalk", Category = "Daily Shop", Moveable = true, Price = "80" },
+    { Name = "Fazbore", Category = "Daily Shop", Moveable = false, Price = "50" },
+    { Name = "Paws and Claws", Category = "Daily Shop", Moveable = false, Price = "40" },
+    { Name = "A-Pose", Category = "Daily Shop", Moveable = true, Price = "150" },
+    { Name = "T-Pose", Category = "Daily Shop", Moveable = false, Price = "30" },
+    { Name = "Company Man", Category = "Daily Shop", Moveable = false, Price = "40" },
+    { Name = "Bring It Around", Category = "Daily Shop", Moveable = false, Price = "40" },
+    { Name = "Lunar Party", Category = "Daily Shop", Moveable = false, Price = "50" },
+    { Name = "Parker Pride", Category = "Daily Shop", Moveable = false, Price = "60" },
+    { Name = "Kickback", Category = "Daily Shop", Moveable = false, Price = "80" },
+    { Name = "Line Dance", Category = "Daily Shop", Moveable = false, Price = "50" },
+    { Name = "Flashing Lights", Category = "Daily Shop", Moveable = true, Price = "60" },
+    { Name = "Boogie Down", Category = "Daily Shop", Moveable = true, Price = "50" },
+    { Name = "Rushin' Around", Category = "Daily Shop", Moveable = true, Price = "80" },
+    { Name = "Nizmoo", Category = "Daily Shop", Moveable = false, Price = "80" },
+    { Name = "Mashle", Category = "Daily Shop", Moveable = true, Price = "35" },
+    { Name = "Popipopi", Category = "Daily Shop", Moveable = false, Price = "40" },
+    { Name = "Robot", Category = "Daily Shop", Moveable = true, Price = "60" },
+    { Name = "Serious March", Category = "Daily Shop", Moveable = true, Price = "60" },
+    { Name = "Star Power", Category = "Daily Shop", Moveable = false, Price = "60" },
+    { Name = "Raining Tacos", Category = "Daily Shop", Moveable = false, Price = "40" },
+    { Name = "Smile Dance", Category = "Daily Shop", Moveable = false, Price = "70" },
+    { Name = "Maraca Time", Category = "Daily Shop", Moveable = true, Price = "40" },
+    { Name = "Spooky Time", Category = "Daily Shop", Moveable = true, Price = "40" },
+    { Name = "Snow Angel", Category = "Daily Shop", Moveable = false, Price = "40" },
+    { Name = "Sightless Dance", Category = "Daily Shop", Moveable = false, Price = "100" },
+    { Name = "Firework Blast", Category = "Special", Moveable = false, Price = "60" },
+    { Name = "Gangnam Style", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "L Dance", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Macarena", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Griddy", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Cat Party", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Hovering Crystal", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Tank", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Rocket", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "March Showcase", Category = "Gamepasses", Moveable = false, Price = "" },
+    { Name = "Skateboard Stroll", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Classic Jeep", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Ducky March", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Sleepybara", Category = "Gamepasses", Moveable = false, Price = "" },
+    { Name = "Turtle Hobble", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Solar Bike", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Solar Conqueror", Category = "Gamepasses", Moveable = false, Price = "" },
+    { Name = "Solar Slayer", Category = "Gamepasses", Moveable = false, Price = "" },
+    { Name = "Fresh Flop", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Dog Party", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Flying Fish", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Caffeinated", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Cat Dance", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Frolic", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Oiia Oiia", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Wess", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Banana Dance", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Crab Dance", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Hit The Jackpot", Category = "Gamepasses", Moveable = false, Price = "" },
+    { Name = "Cuddle Bear Sit", Category = "Gamepasses", Moveable = false, Price = "" },
+    { Name = "Astro Slide", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Queens Appearance", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Regal Walk", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Winged Royal Sit", Category = "Gamepasses", Moveable = false, Price = "" },
+    { Name = "Mounted Seahorse", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Neptunes Trone", Category = "Gamepasses", Moveable = false, Price = "" },
+    { Name = "Shell Hermit", Category = "Gamepasses", Moveable = true, Price = "" },
+    { Name = "Werewolf Howl", Category = "Halloween", Moveable = false, Price = "30" },
+    { Name = "Pump It Up", Category = "Halloween", Moveable = false, Price = "40" },
+    { Name = "Thriller", Category = "Halloween", Moveable = false, Price = "70" },
+    { Name = "Rockin' Stride", Category = "Halloween", Moveable = false, Price = "80" },
+    { Name = "Broom of Doom", Category = "Halloween", Moveable = false, Price = "200" },
+    { Name = "Fright Funk", Category = "Halloween", Moveable = false, Price = "60" },
+    { Name = "Reanimated", Category = "Halloween", Moveable = false, Price = "60" },
+    { Name = "Cyber Broom", Category = "Halloween", Moveable = false, Price = "80" },
+    { Name = "Ghastly Grimiore", Category = "Halloween", Moveable = false, Price = "150" },
+    { Name = "Dead Bone Stride", Category = "Halloween", Moveable = false, Price = "60" },
+    { Name = "Headless Baller", Category = "Halloween", Moveable = false, Price = "50" },
+    { Name = "Zombie Stride", Category = "Halloween", Moveable = false, Price = "40" },
+    { Name = "Xylobone", Category = "Halloween", Moveable = false, Price = "40" },
+    { Name = "Ghoulish Galleon", Category = "Halloween", Moveable = false, Price = "400" },
+    { Name = "Cuerdas Del Alma", Category = "Halloween", Moveable = false, Price = "170" },
+    { Name = "Grave Rider", Category = "Halloween", Moveable = false, Price = "220" },
+    { Name = "Mariachi Band", Category = "Halloween", Moveable = false, Price = "150" },
+    { Name = "Spirited Away", Category = "Halloween", Moveable = false, Price = "250" },
+    { Name = "Scorched Earth", Category = "Halloween", Moveable = false, Price = "300" },
+    { Name = "Headless Horseman", Category = "Halloween", Moveable = false, Price = "666" },
+    { Name = "Gargoyle Stand", Category = "Halloween", Moveable = false, Price = "100" },
+    { Name = "Ooga Booga", Category = "Halloween", Moveable = false, Price = "80" },
+    { Name = "Lil' Cthulhu", Category = "Halloween", Moveable = true, Price = "150" },
+    { Name = "Wicker Beast", Category = "Halloween", Moveable = true, Price = "150" },
+    { Name = "Ghost Symphony", Category = "Halloween", Moveable = false, Price = "150" },
+    { Name = "Christmas Boogie", Category = "Winter Holidays", Moveable = false, Price = "40" },
+    { Name = "Nutcracker Dance", Category = "Winter Holidays", Moveable = false, Price = "60" },
+    { Name = "Wind-up Dance", Category = "Winter Holidays", Moveable = false, Price = "70" },
+    { Name = "Campfire Doze", Category = "Winter Holidays", Moveable = false, Price = "60" },
+    { Name = "3-Place March", Category = "Winter Holidays", Moveable = false, Price = "100" },
+    { Name = "Snowmobile Cruise", Category = "Winter Holidays", Moveable = false, Price = "160" },
+    { Name = "Flying Sleigh", Category = "Winter Holidays", Moveable = false, Price = "120" },
+    { Name = "Bobo in the Box", Category = "Winter Holidays", Moveable = false, Price = "50" },
+    { Name = "Sled Drifting", Category = "Winter Holidays", Moveable = false, Price = "60" },
+    { Name = "Ice Fishing", Category = "Winter Holidays", Moveable = false, Price = "80" },
+    { Name = "Santa Mech", Category = "Winter Holidays", Moveable = false, Price = "300" },
+    { Name = "Snowman Construction", Category = "Winter Holidays", Moveable = false, Price = "60" },
+    { Name = "Toy Train Ride", Category = "Winter Holidays", Moveable = false, Price = "150" },
+    { Name = "Wind-Up Pose", Category = "Winter Holidays", Moveable = false, Price = "80" },
+    { Name = "Rudolph Mount", Category = "Winter Holidays", Moveable = false, Price = "200" },
+    { Name = "Winter Ride", Category = "Winter Holidays", Moveable = false, Price = "200" },
+    { Name = "Cozy Chair", Category = "Winter Holidays", Moveable = false, Price = "100" },
+    { Name = "Rocking Horse", Category = "Winter Holidays", Moveable = false, Price = "100" },
+    { Name = "Winter Melody", Category = "Winter Holidays", Moveable = false, Price = "250" },
+    { Name = "Ski Spree", Category = "Winter Holidays", Moveable = false, Price = "200" },
+    { Name = "Frost Drake", Category = "Winter Holidays", Moveable = false, Price = "500" },
+    { Name = "Irish Jig", Category = "St. Patricks Days", Moveable = false, Price = "100" },
+    { Name = "Avarice Lounge", Category = "St. Patricks Days", Moveable = false, Price = "140" },
+    { Name = "April Shower", Category = "St. Patricks Days", Moveable = false, Price = "100" },
+    { Name = "Gold Ritual", Category = "St. Patricks Days", Moveable = false, Price = "160" },
+    { Name = "Auspicious Well", Category = "St. Patricks Days", Moveable = false, Price = "/" },
+    { Name = "Harp Recital", Category = "Valentines", Moveable = false, Price = "100" },
+    { Name = "Angelic Wings", Category = "Valentines", Moveable = false, Price = "160" },
+    { Name = "Serene Perch", Category = "Valentines", Moveable = false, Price = "100" },
+    { Name = "Valentine Computer", Category = "Valentines", Moveable = false, Price = "100" },
+    { Name = "Dreamy Cloud", Category = "Valentines", Moveable = false, Price = "120" },
+    { Name = "Dynasty Drumming", Category = "Lunar Year", Moveable = false, Price = "60" },
+    { Name = "Turkey Jockey", Category = "Thanksgiving", Moveable = false, Price = "50" },
+    { Name = "Many Fans", Category = "Summer", Moveable = false, Price = "100" },
+    { Name = "Summer Days", Category = "Summer", Moveable = false, Price = "100" },
+    { Name = "Beach Chair Lounge", Category = "Summer", Moveable = false, Price = "100" },
+    { Name = "Row Boat", Category = "Summer", Moveable = false, Price = "120" },
+    { Name = "Lemonade Stand", Category = "Summer", Moveable = false, Price = "140" },
+    { Name = "Casual Surfing", Category = "Summer", Moveable = false, Price = "150" },
+    { Name = "Pool Time", Category = "Summer", Moveable = false, Price = "120" },
+    { Name = "Encapsluated Bubble", Category = "Summer", Moveable = false, Price = "100" },
+    { Name = "Submarine Ride", Category = "Summer", Moveable = false, Price = "100" },
+    { Name = "Clam Clamor", Category = "Summer", Moveable = false, Price = "120" },
+    { Name = "Frutiger Floatie", Category = "Summer", Moveable = false, Price = "130" },
+    { Name = "Aquatic Daydreamer", Category = "Summer", Moveable = false, Price = "150" },
+    { Name = "Leaping Dolphin", Category = "Summer", Moveable = false, Price = "150" },
+    { Name = "Astral Manta Ray", Category = "Summer", Moveable = false, Price = "160" },
+    { Name = "Summer Lowrider", Category = "Summer", Moveable = false, Price = "300" },
+    { Name = "Lotus Swing", Category = "Spring", Moveable = false, Price = "100" },
+    { Name = "Cocoon Rebirth", Category = "Spring", Moveable = false, Price = "140" },
+    { Name = "Honey Pool", Category = "Spring", Moveable = false, Price = "150" },
+    { Name = "Snail Mail", Category = "Spring", Moveable = false, Price = "150" },
+    { Name = "Ladybug Flight", Category = "Spring", Moveable = false, Price = "250" },
+    { Name = "Megafly Jet", Category = "Spring", Moveable = false, Price = "300" },
+    { Name = "Classic Stride", Category = "Miscellaneous", Moveable = false, Price = "30" },
+    { Name = "Fast Food Delight", Category = "Miscellaneous", Moveable = false, Price = "40" },
+    { Name = "Potion Mash", Category = "Miscellaneous", Moveable = false, Price = "40" },
+    { Name = "Classic Dance", Category = "Miscellaneous", Moveable = false, Price = "40" },
+    { Name = "M3GAN Dance", Category = "Collaborations", Moveable = false, Price = "40" },
+    { Name = "Robot M3GAN", Category = "Collaborations", Moveable = false, Price = "40" },
+    { Name = "Winter of '85", Category = "Collaborations", Moveable = false, Price = "" },
+    { Name = "Beg", Category = "Other", Moveable = false, Price = "50" },
+    { Name = "See Tinh", Category = "Other", Moveable = false, Price = "50" },
+    { Name = "Bhop", Category = "Other", Moveable = false, Price = "150" },
+    { Name = "BOO!", Category = "Other", Moveable = false, Price = "30" },
+    { Name = "Pumpkin Cravin'", Category = "Other", Moveable = false, Price = "40" },
+    { Name = "Dead Man's Grave", Category = "Other", Moveable = false, Price = "??" },
+    { Name = "Dirtbike", Category = "Other", Moveable = false, Price = "??" },
+    { Name = "Summer Shades", Category = "Other", Moveable = false, Price = "??" },
+    { Name = "NPC Dance", Category = "Other", Moveable = false, Price = "??" },
+    { Name = "Bean Bag", Category = "Other", Moveable = false, Price = "" },
+    { Name = "Boneless", Category = "Other", Moveable = false, Price = "" },
+    { Name = "Popular", Category = "Other", Moveable = false, Price = "" },
+    { Name = "Rockefeller Street", Category = "Other", Moveable = false, Price = "" },
+    { Name = "Bumblebee", Category = "Other", Moveable = false, Price = "" },
+    { Name = "Shuba Dance", Category = "Other", Moveable = false, Price = "" },
+    { Name = "Twist", Category = "Other", Moveable = false, Price = "" },
+}
+
+local WIKI_UNUSUALS = {
+    { Name = "Electrified", Category = "Daily Shop", Price = "250" },
+    { Name = "Cursed Horns", Category = "Daily Shop", Price = "300" },
+    { Name = "Voltaic", Category = "Daily Shop", Price = "350" },
+    { Name = "Shinning Sparkles", Category = "Daily Shop", Price = "200" },
+    { Name = "Flowering Petals", Category = "Daily Shop", Price = "180" },
+    { Name = "Charming Heart", Category = "Daily Shop", Price = "150" },
+    { Name = "Red Abduction", Category = "Daily Shop", Price = "180" },
+    { Name = "Fire Horns", Category = "Daily Shop", Price = "200" },
+    { Name = "Green Abduction", Category = "Daily Shop", Price = "180" },
+    { Name = "Prismatic Geyser", Category = "Daily Shop", Price = "200" },
+    { Name = "Haha", Category = "Daily Shop", Price = "150" },
+    { Name = "Autumn Leaves", Category = "Daily Shop", Price = "150" },
+    { Name = "Thundering Storm", Category = "Daily Shop", Price = "300" },
+    { Name = "Night Lights", Category = "Daily Shop", Price = "250" },
+    { Name = "Red Energized", Category = "Daily Shop", Price = "250" },
+    { Name = "Astral Nebula", Category = "Daily Shop", Price = "300" },
+    { Name = "Particulate Iridescence", Category = "Daily Shop", Price = "220" },
+    { Name = "Igneous Geyser", Category = "Daily Shop", Price = "200" },
+    { Name = "Purple Energized", Category = "Daily Shop", Price = "250" },
+    { Name = "Roseate Geyser", Category = "Daily Shop", Price = "200" },
+    { Name = "Blue Abduction", Category = "Daily Shop", Price = "180" },
+    { Name = "Dark Star", Category = "Daily Shop", Price = "300" },
+    { Name = "Prismatic Radiance", Category = "Daily Shop", Price = "320" },
+    { Name = "Cosmic Vortex", Category = "Daily Shop", Price = "300" },
+    { Name = "Irradiating Halo", Category = "Daily Shop", Price = "250" },
+    { Name = "Byte Fracture", Category = "Daily Shop", Price = "180" },
+    { Name = "Australis Nebula", Category = "Daily Shop", Price = "450" },
+    { Name = "Ectoplasmic Star", Category = "Daily Shop", Price = "400" },
+    { Name = "Dizzy Star", Category = "Daily Shop", Price = "125" },
+    { Name = "Howlite Maelstrom", Category = "Daily Shop", Price = "300" },
+    { Name = "Lunar Light", Category = "Daily Shop", Price = "220" },
+    { Name = "Borealis Nebula", Category = "Daily Shop", Price = "450" },
+    { Name = "Halleys Comet", Category = "Daily Shop", Price = "350" },
+    { Name = "Cosmic Halo", Category = "Daily Shop", Price = "375" },
+    { Name = "Binary Beams", Category = "Daily Shop", Price = "150" },
+    { Name = "Bubbly", Category = "Daily Shop", Price = "250" },
+    { Name = "Lavender Utopia", Category = "Daily Shop", Price = "220" },
+    { Name = "Refractions", Category = "Daily Shop", Price = "275" },
+    { Name = "Colossal Flashes", Category = "Daily Shop", Price = "250" },
+    { Name = "Violet Nocturne", Category = "Daily Shop", Price = "220" },
+    { Name = "Amethyst Energy", Category = "Daily Shop", Price = "180" },
+    { Name = "Timewarp", Category = "Daily Shop", Price = "240" },
+    { Name = "Shimmering Paradise", Category = "Daily Shop", Price = "220" },
+    { Name = "Collapsing Singularity", Category = "Daily Shop", Price = "340" },
+    { Name = "Scarlet Maelstrom", Category = "Daily Shop", Price = "300" },
+    { Name = "Azure Maelstrom", Category = "Daily Shop", Price = "320" },
+    { Name = "Roaring Singularity", Category = "Daily Shop", Price = "340" },
+    { Name = "Time Keeper", Category = "Daily Shop", Price = "180" },
+    { Name = "Moonlight Butterflies", Category = "Daily Shop", Price = "220" },
+    { Name = "Morning Butterflies", Category = "Daily Shop", Price = "220" },
+    { Name = "Eclipse Butterflies", Category = "Daily Shop", Price = "220" },
+    { Name = "Orange EMP", Category = "Daily Shop", Price = "180" },
+    { Name = "Void Star", Category = "Daily Shop", Price = "100" },
+    { Name = "Flame Wreath", Category = "Daily Shop", Price = "150" },
+    { Name = "Selene's Grace", Category = "Daily Shop", Price = "200" },
+    { Name = "Purple EMP", Category = "Daily Shop", Price = "180" },
+    { Name = "Falling Star", Category = "Daily Shop", Price = "250" },
+    { Name = "Bolt Skaters", Category = "Daily Shop", Price = "150" },
+    { Name = "Butterfly Eclipse", Category = "Daily Shop", Price = "160" },
+    { Name = "Butterfly Azure", Category = "Daily Shop", Price = "160" },
+    { Name = "Butterfly Crimson", Category = "Daily Shop", Price = "160" },
+    { Name = "Butterfly Orchid", Category = "Daily Shop", Price = "160" },
+    { Name = "Orange Star Eruption", Category = "Daily Shop", Price = "160" },
+    { Name = "Headphone Resonanse", Category = "Daily Shop", Price = "100" },
+    { Name = "Shifting Paradigm", Category = "Daily Shop", Price = "220" },
+    { Name = "Abyssal Rapture", Category = "Daily Shop", Price = "220" },
+    { Name = "Blue Star Eruption", Category = "Daily Shop", Price = "160" },
+    { Name = "Pink Star Eruption", Category = "Daily Shop", Price = "160" },
+    { Name = "Alpha Tester", Category = "Special", Price = "" },
+    { Name = "2023 Celebration", Category = "Special", Price = "" },
+    { Name = "Void Corruption", Category = "Special", Price = "" },
+    { Name = "Hallowed Specters", Category = "Special", Price = "" },
+    { Name = "Paranormal Vortex", Category = "Special", Price = "" },
+    { Name = "Khan of Winter", Category = "Special", Price = "" },
+    { Name = "Radiant Sun", Category = "Special", Price = "" },
+    { Name = "Content Creator Haze", Category = "Special", Price = "" },
+    { Name = "Circling Cat Jard", Category = "Special", Price = "200" },
+    { Name = "New Year Rays", Category = "Special", Price = "80" },
+    { Name = "Party", Category = "Special", Price = "160" },
+    { Name = "Circling Eclipse Cola", Category = "Special", Price = "40" },
+    { Name = "Disco Mania", Category = "Special", Price = "50" },
+    { Name = "Donation Victorian", Category = "Special", Price = "" },
+    { Name = "Experienced Victorian", Category = "Special", Price = "" },
+    { Name = "Survival Victorian", Category = "Special", Price = "" },
+    { Name = "Thermocline", Category = "Gamepasses", Price = "" },
+    { Name = "Encapsulated Barbed Wires", Category = "Gamepasses", Price = "" },
+    { Name = "Cat Radiance", Category = "Gamepasses", Price = "" },
+    { Name = "Oozing Money", Category = "Gamepasses", Price = "" },
+    { Name = "Prismatic Whispers", Category = "Gamepasses", Price = "" },
+    { Name = "Chaotic Radiance", Category = "Gamepasses", Price = "" },
+    { Name = "Technotic", Category = "Gamepasses", Price = "" },
+    { Name = "Spawn Halo", Category = "Gamepasses", Price = "" },
+    { Name = "Animal Aura", Category = "Gamepasses", Price = "" },
+    { Name = "Horns of Toxicity", Category = "Gamepasses", Price = "" },
+    { Name = "Horns of Inferno", Category = "Gamepasses", Price = "" },
+    { Name = "Horns of Frost", Category = "Gamepasses", Price = "" },
+    { Name = "Eclipse Nova", Category = "Gamepasses", Price = "" },
+    { Name = "Doggo Aura", Category = "Gamepasses", Price = "" },
+    { Name = "Koi Pond", Category = "Gamepasses", Price = "" },
+    { Name = "Bee Shield", Category = "Gamepasses", Price = "" },
+    { Name = "Cape of Poseidon", Category = "Gamepasses", Price = "" },
+    { Name = "Toxic Inferno", Category = "Halloween", Price = "150" },
+    { Name = "Cursed Eye", Category = "Halloween", Price = "80" },
+    { Name = "Blood Moon", Category = "Halloween", Price = "300" },
+    { Name = "Ominous Demise", Category = "Halloween", Price = "120" },
+    { Name = "Bluefire Portal", Category = "Halloween", Price = "220" },
+    { Name = "Hellfire Portal", Category = "Halloween", Price = "220" },
+    { Name = "Haunted Iridescence", Category = "Halloween", Price = "250" },
+    { Name = "Dark Tendrils", Category = "Halloween", Price = "200" },
+    { Name = "Eye Illusion", Category = "Halloween", Price = "150" },
+    { Name = "Soul Snatcher", Category = "Halloween", Price = "80" },
+    { Name = "Scarlet Slash", Category = "Halloween", Price = "100" },
+    { Name = "Noxious Aura", Category = "Halloween", Price = "120" },
+    { Name = "Azure Mist Watcher", Category = "Halloween", Price = "160" },
+    { Name = "Crimson Mist Watcher", Category = "Halloween", Price = "160" },
+    { Name = "Hexer Iris", Category = "Halloween", Price = "200" },
+    { Name = "Demon Iris", Category = "Halloween", Price = "200" },
+    { Name = "Plagued Iris", Category = "Halloween", Price = "200" },
+    { Name = "Abyssal Eyes", Category = "Halloween", Price = "160" },
+    { Name = "Soul Rifter", Category = "Halloween", Price = "220" },
+    { Name = "Ruinous Arcana", Category = "Halloween", Price = "200" },
+    { Name = "Runic Ritual", Category = "Halloween", Price = "250" },
+    { Name = "Nuclear Future", Category = "Halloween", Price = "300" },
+    { Name = "Palpitating Heart", Category = "Halloween", Price = "150" },
+    { Name = "Web Traps", Category = "Halloween", Price = "150" },
+    { Name = "Cackling Moon", Category = "Halloween", Price = "160" },
+    { Name = "Runic Summoning", Category = "Halloween", Price = "220" },
+    { Name = "Cataclysmic Portal", Category = "Halloween", Price = "220" },
+    { Name = "Marigold Ritual", Category = "Halloween", Price = "250" },
+    { Name = "Runic Winds", Category = "Halloween", Price = "250" },
+    { Name = "Monochrome Eclipse", Category = "Halloween", Price = "200" },
+    { Name = "Demonic Acidic Wings", Category = "Halloween", Price = "200" },
+    { Name = "Demonic Eclipse Wings", Category = "Halloween", Price = "200" },
+    { Name = "Demonic Infernal Wings", Category = "Halloween", Price = "200" },
+    { Name = "Angel of Dishonor", Category = "Halloween", Price = "" },
+    { Name = "Stellar Nebula", Category = "Halloween", Price = "80" },
+    { Name = "Haunted Carousel", Category = "Halloween", Price = "120" },
+    { Name = "Auric Shade Runes", Category = "Halloween", Price = "140}}" },
+    { Name = "Night Shade Runes", Category = "Halloween", Price = "140" },
+    { Name = "Blood Shade Runes", Category = "Halloween", Price = "140" },
+    { Name = "Blizzardy Storm", Category = "Winter Holidays", Price = "100" },
+    { Name = "Minty Explosion", Category = "Winter Holidays", Price = "120" },
+    { Name = "Xmas Burst", Category = "Winter Holidays", Price = "140" },
+    { Name = "Glacial Outburst", Category = "Winter Holidays", Price = "200" },
+    { Name = "Subzero Burst", Category = "Winter Holidays", Price = "180" },
+    { Name = "Frigid Perception", Category = "Winter Holidays", Price = "250" },
+    { Name = "Suspended Lights", Category = "Winter Holidays", Price = "175" },
+    { Name = "Shimmering Coronet", Category = "Winter Holidays", Price = "225" },
+    { Name = "Frost Flame", Category = "Winter Holidays", Price = "200" },
+    { Name = "Glowing Tree", Category = "Winter Holidays", Price = "275" },
+    { Name = "Winter Chains", Category = "Winter Holidays", Price = "150" },
+    { Name = "Angelic Redemption", Category = "Winter Holidays", Price = "300" },
+    { Name = "Aurora Borealis", Category = "Winter Holidays", Price = "220" },
+    { Name = "Auroran Stag", Category = "Winter Holidays", Price = "300" },
+    { Name = "Gilded Stag", Category = "Winter Holidays", Price = "300" },
+    { Name = "Verdant Stag", Category = "Winter Holidays", Price = "300" },
+    { Name = "Wintertide Essence", Category = "Winter Holidays", Price = "220" },
+    { Name = "Candynado", Category = "Winter Holidays", Price = "120" },
+    { Name = "Snownado", Category = "Winter Holidays", Price = "120" },
+    { Name = "Ethereal Saucer", Category = "Winter Holidays", Price = "100" },
+    { Name = "Candy Cane Aura", Category = "Winter Holidays", Price = "160" },
+    { Name = "Auroran Tophat", Category = "Winter Holidays", Price = "130" },
+    { Name = "Festive Constellation", Category = "Winter Holidays", Price = "120" },
+    { Name = "Jolly Crown (Blue)", Category = "Winter Holidays", Price = "150" },
+    { Name = "Jolly Crown (Green)", Category = "Winter Holidays", Price = "150" },
+    { Name = "Eclipse Crown", Category = "Winter Holidays", Price = "150" },
+    { Name = "Orbiting Serenade", Category = "Winter Holidays", Price = "250" },
+    { Name = "Relentless Blizzard", Category = "Winter Holidays", Price = "120" },
+    { Name = "Mystical Tree", Category = "Winter Holidays", Price = "130" },
+    { Name = "Amethyst Aurora", Category = "Winter Holidays", Price = "200" },
+    { Name = "Borealis Aurora", Category = "Winter Holidays", Price = "200" },
+    { Name = "Pepperiment Aurora", Category = "Winter Holidays", Price = "200" },
+    { Name = "Snowflake Aegis", Category = "Winter Holidays", Price = "250" },
+    { Name = "Northern Star Radiance", Category = "Winter Holidays", Price = "300" },
+    { Name = "Glacial Entrails", Category = "Winter Holidays", Price = "250" },
+    { Name = "Heavenly Crown", Category = "Winter Holidays", Price = "400" },
+    { Name = "Bionic Rejuvination", Category = "Valentines", Price = "40" },
+    { Name = "Adoration", Category = "Valentines", Price = "50" },
+    { Name = "Euphoria", Category = "Valentines", Price = "60" },
+    { Name = "Eclipse Love", Category = "Valentines", Price = "150" },
+    { Name = "Pure Love", Category = "Valentines", Price = "150" },
+    { Name = "Atomic Heart", Category = "Valentines", Price = "250" },
+    { Name = "Cupids Arrow", Category = "Valentines", Price = "500" },
+    { Name = "Celestial Stars", Category = "Valentines", Price = "220" },
+    { Name = "Heart Skaters", Category = "Valentines", Price = "250" },
+    { Name = "Circle of Roses", Category = "Valentines", Price = "150" },
+    { Name = "Healing Halo", Category = "Valentines", Price = "220" },
+    { Name = "Sakura Flowers", Category = "Valentines", Price = "320" },
+    { Name = "Clover Essence", Category = "St. Patricks Days", Price = "120" },
+    { Name = "Lucky Strike", Category = "St. Patricks Days", Price = "180" },
+    { Name = "Leprechauns Rune", Category = "St. Patricks Days", Price = "220" },
+    { Name = "St. Pixels", Category = "St. Patricks Days", Price = "300" },
+    { Name = "Runic Clover Legs", Category = "St. Patricks Days", Price = "120" },
+    { Name = "Retro Clover Explosion", Category = "St. Patricks Days", Price = "200" },
+    { Name = "Midas Touch", Category = "St. Patricks Days", Price = "300" },
+    { Name = "Shamrock Shimmer", Category = "St. Patricks Days", Price = "100 /" },
+    { Name = "2nd Anniversary Hat", Category = "Anniversary", Price = "100" },
+    { Name = "Fiery Candle", Category = "Anniversary", Price = "60" },
+    { Name = "Anniversary Fireworks", Category = "Anniversary", Price = "50" },
+    { Name = "Lunar Fortune", Category = "Lunar Year", Price = "60" },
+    { Name = "Auroran Bunny Ears", Category = "Easter", Price = "60" },
+    { Name = "Carrot Bunny Ears", Category = "Easter", Price = "60" },
+    { Name = "Jellyfish Swarm", Category = "Summer", Price = "150" },
+    { Name = "Hot Hawaiian Flowers", Category = "Summer", Price = "160" },
+    { Name = "Tropical Hawaiian Flowers", Category = "Summer", Price = "160" },
+    { Name = "Cool Hawaiian Flowers", Category = "Summer", Price = "160" },
+    { Name = "Sunny Skies", Category = "Summer", Price = "180" },
+    { Name = "Eye Of Horus", Category = "Summer", Price = "200" },
+    { Name = "Deepsea Angler", Category = "Summer", Price = "200" },
+    { Name = "Vaporwave Rays", Category = "Summer", Price = "250" },
+    { Name = "Solar Flare Streak", Category = "Summer", Price = "300" },
+    { Name = "Ducky Waterfall", Category = "Summer", Price = "100" },
+    { Name = "Sunny Day", Category = "Summer", Price = "120" },
+    { Name = "Ocean Symphony", Category = "Summer", Price = "130" },
+    { Name = "Blazing Sun", Category = "Summer", Price = "140" },
+    { Name = "Tropical Nature Crown", Category = "Summer", Price = "150" },
+    { Name = "Luminescent Jellyfish", Category = "Summer", Price = "140" },
+    { Name = "Retro Sunset", Category = "Summer", Price = "180" },
+    { Name = "Skyline Vinyl", Category = "Summer", Price = "220" },
+    { Name = "Easter Egg Hunter", Category = "Spring", Price = "150" },
+    { Name = "Lotus Rift", Category = "Spring", Price = "200" },
+    { Name = "Oak Blessing", Category = "Spring", Price = "200" },
+    { Name = "Aquamarine Blossom", Category = "Spring", Price = "220" },
+    { Name = "Crimson Blossom", Category = "Spring", Price = "220" },
+    { Name = "Luminous Blossom", Category = "Spring", Price = "220" },
+    { Name = "Verdant Laurel", Category = "Spring", Price = "200" },
+    { Name = "Monarch Wings", Category = "Spring", Price = "300" },
+    { Name = "Tixplosion", Category = "Miscellaneous", Price = "80" },
+    { Name = "Ring of Fire Halo", Category = "Miscellaneous", Price = "80" },
+    { Name = "Glowing Haze", Category = "Staff Exclusive", Price = "" },
+    { Name = "Vortex of Bobos", Category = "Staff Exclusive", Price = "" },
+    { Name = "Nuclear Doom", Category = "Staff Exclusive", Price = "" },
+    { Name = "Circling Beams", Category = "Staff Exclusive", Price = "" },
+    { Name = "Circling Cat Pufferfish", Category = "Staff Exclusive", Price = "" },
+    { Name = "LOL CATZ", Category = "Staff Exclusive", Price = "" },
+    { Name = "Blood Curdle", Category = "Other", Price = "140" },
+    { Name = "Incandescent Reaper", Category = "Other", Price = "120" },
+    { Name = "Sunrays", Category = "Other", Price = "" },
+    { Name = "Mystic Tides", Category = "Other", Price = "" },
+    { Name = "Eternal Inferno", Category = "Other", Price = "" },
+    { Name = "Comic Book Winners", Category = "Other", Price = "" },
+    { Name = "Ignited Blaze", Category = "Other", Price = "" },
+    { Name = "Battlepass Contributor Reward", Category = "Other", Price = "" },
+    { Name = "Faceless Star", Category = "Other", Price = "" },
+    { Name = "Nature's Power", Category = "Other", Price = "" },
+    { Name = "Unknown", Category = "Other", Price = "Scrapped" },
+    { Name = "Hearhead", Category = "Other", Price = "Unreleased" },
+}
+
+-- Name cleaner for fuzzy / normalized matching (lowercase alphanumeric only)
+local function cleanName(str)
+    if not str then return "" end
+    return tostring(str):lower():gsub("[^%w]", "")
+end
+
+-- Common aliases table for rapid user lookup
+local ALIASES = {
+    Emotes = {
+        ["rockinstride"] = "Rockin' Stride",
+        ["broom"] = "Broom of Doom",
+        ["cyberbroom"] = "Cyber Broom",
+        ["zombiestride"] = "Zombie Stride",
+        ["yourehired"] = "You're Hired",
+        ["deadmansgrave"] = "Dead Man's Grave",
+        ["fastfooddelight"] = "Fast Food Delight",
+        ["classicstride"] = "Classic Stride",
+        ["classicdance"] = "Classic Dance",
+        ["pumpkincravin"] = "Pumpkin Cravin'",
+    },
+    Unusuals = {
+        ["cchaze"] = "Content Creator Haze",
+        ["cchaz"] = "Content Creator Haze",
+        ["contentcreatorhaze"] = "Content Creator Haze",
+        ["shiningsparkles"] = "Shinning Sparkles",
+        ["shinningsparkles"] = "Shinning Sparkles",
+        ["halleyscomet"] = "Halleys Comet",
+        ["halleycomet"] = "Halleys Comet",
+        ["ringoffire"] = "Ring of Fire Halo",
+        ["ringoffirehalo"] = "Ring of Fire Halo",
+        ["naturespower"] = "Nature's Power",
+        ["lolcatz"] = "LOL CATZ",
+        ["circlingcatpufferfish"] = "Circling Cat Pufferfish",
+    }
+}
+
+--------------------------------------------------------------------------------
+-- STATE MANAGEMENT
+--------------------------------------------------------------------------------
+local State = {
+    Emotes = {
+        Enabled = true,
+        Map = {},       -- [cleanOrig] = { Orig = ..., Rep = ... }
+        ByClean = {},   -- [cleanName] = ItemData
+        ById = {},      -- [id] = ItemData
+        List = {},      -- Array of all Emote items
+        Backups = getgenv().CosmeticBackups.Emotes
+    },
+    Unusuals = {
+        Enabled = true,
+        Map = {},       -- [cleanOrig] = { Orig = ..., Rep = ... }
+        ByClean = {},   -- [cleanName] = ItemData
+        ById = {},      -- [id] = ItemData
+        List = {},      -- Array of all Unusual items
+        Backups = getgenv().CosmeticBackups.Unusuals
+    },
+    ActiveTab = "Emotes",       -- "Emotes" | "Unusuals" | "Swaps"
+    ActiveCategoryFilter = "All" -- "All" | Category Name
+}
+
+--------------------------------------------------------------------------------
+-- LIVE IN-GAME UI LABEL SYNCHRONIZER
+--------------------------------------------------------------------------------
+local function updateInGameUILabels(oldName, newName)
+    if not oldName or not newName or oldName == newName then return end
+    pcall(function()
+        local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if not playerGui then return end
+
+        local cleanOld = cleanName(oldName)
+
+        for _, desc in ipairs(playerGui:GetDescendants()) do
+            if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+                if desc.Text == oldName or cleanName(desc.Text) == cleanOld then
+                    desc.Text = newName
+                end
+            end
+        end
+    end)
+end
+
+--------------------------------------------------------------------------------
+-- RIG / COSMETIC REFRESH LOGIC (For Unusuals)
+--------------------------------------------------------------------------------
+local function refreshRig()
+    pcall(function()
+        -- 1. Try Evade RigService if present
+        local services = ReplicatedStorage:FindFirstChild("Services")
+        if services then
+            local asset = services:FindFirstChild("Asset")
+            if asset then
+                local rigServiceMod = asset:FindFirstChild("RigService")
+                if rigServiceMod and rigServiceMod:IsA("ModuleScript") then
+                    local rigService = require(rigServiceMod)
+                    if type(rigService.AddCosmetics) == "function" then
+                        local char = LocalPlayer.Character
+                        if char then
+                            rigService.AddCosmetics(char)
+                        end
+                    end
+                end
+            end
+        end
+
+        -- 2. Fallback: refresh attachments & particles on Character & Workspace.Rigs
+        local targets = {}
+        if LocalPlayer.Character then table.insert(targets, LocalPlayer.Character) end
+        local rigs = Workspace:FindFirstChild("Rigs")
+        if rigs then
+            for _, r in ipairs(rigs:GetChildren()) do
+                if r.Name == LocalPlayer.Name or r:FindFirstChildOfClass("Humanoid") then
+                    table.insert(targets, r)
+                end
+            end
+        end
+
+        for _, model in ipairs(targets) do
+            for _, desc in ipairs(model:GetDescendants()) do
+                if desc:IsA("ParticleEmitter") then
+                    desc.Enabled = false
+                    task.delay(0.05, function()
+                        if desc and desc.Parent then desc.Enabled = true end
+                    end)
+                end
+            end
+        end
+    end)
+end
+
+--------------------------------------------------------------------------------
+-- SCANNING & CATALOG INITIALIZATION
+--------------------------------------------------------------------------------
+local function initDatabases()
+    -- 1. Initialize Emotes from Wiki catalog
+    table.clear(State.Emotes.ByClean)
+    table.clear(State.Emotes.ById)
+    table.clear(State.Emotes.List)
+
+    for _, w in ipairs(WIKI_EMOTES) do
+        local entry = {
+            Name = w.Name,
+            DisplayName = w.Name,
+            Category = w.Category or "Store",
+            Moveable = w.Moveable,
+            Price = w.Price or "",
+            CleanName = cleanName(w.Name),
+            CleanDisplay = cleanName(w.Name),
+            Module = nil,
+            InGame = false,
+            Type = "Emote"
+        }
+        State.Emotes.ByClean[entry.CleanName] = entry
+        table.insert(State.Emotes.List, entry)
+    end
+
+    -- 2. Initialize Unusuals from Wiki catalog
+    table.clear(State.Unusuals.ByClean)
+    table.clear(State.Unusuals.ById)
+    table.clear(State.Unusuals.List)
+
+    for _, w in ipairs(WIKI_UNUSUALS) do
+        local entry = {
+            Name = w.Name,
+            DisplayName = w.Name,
+            Category = w.Category or "Daily Shop",
+            Price = w.Price or "",
+            CleanName = cleanName(w.Name),
+            CleanDisplay = cleanName(w.Name),
+            Module = nil,
+            InGame = false,
+            Type = "Unusual"
+        }
+        State.Unusuals.ByClean[entry.CleanName] = entry
+        table.insert(State.Unusuals.List, entry)
+    end
+end
+
+initDatabases()
+
+-- Scan ReplicatedStorage for live ModuleScripts and link them
+local function scanGameCosmetics()
+    local function registerModule(mod, forcedType)
+        if not mod or not mod:IsA("ModuleScript") then return end
+        pcall(function()
+            local success, data = pcall(require, mod)
+            if not success or typeof(data) ~= "table" then return end
+
+            local rawName = data.Name or mod.Name
+            local displayName = (data.AppearanceInfo and data.AppearanceInfo.Name) or data.DisplayName or rawName
+            local itemId = mod:GetAttribute("ID") or mod:GetAttribute("Id") or data.ID or data.Id or mod.Name
+
+            local cRaw = cleanName(rawName)
+            local cDisp = cleanName(displayName)
+            local cMod = cleanName(mod.Name)
+
+            -- Determine whether Emote or Unusual
+            local isEmote = (forcedType == "Emote")
+                or mod.Parent.Name == "Emotes"
+                or mod.Name:lower():find("emote")
+                or (data.Type == "Emote")
+                or (data.Animation ~= nil or data.AnimationId ~= nil or data.Duration ~= nil)
+
+            local isUnusual = (forcedType == "Unusual")
+                or mod.Parent.Name:lower():find("unusual")
+                or mod.Name:lower():find("unusual")
+                or mod.Name:lower():find("cosmetic")
+                or (data.Type == "Unusual" or data.Type == "Cosmetic")
+                or (mod:FindFirstChildOfClass("ParticleEmitter") ~= nil or mod:FindFirstChildOfClass("Attachment") ~= nil)
+
+            if not isEmote and not isUnusual then
+                if State.Emotes.ByClean[cRaw] or State.Emotes.ByClean[cDisp] or State.Emotes.ByClean[cMod] then
+                    isEmote = true
+                elseif State.Unusuals.ByClean[cRaw] or State.Unusuals.ByClean[cDisp] or State.Unusuals.ByClean[cMod] then
+                    isUnusual = true
+                end
+            end
+
+            if isEmote then
+                local existing = State.Emotes.ByClean[cDisp] or State.Emotes.ByClean[cRaw] or State.Emotes.ByClean[cMod]
+                if existing then
+                    existing.Module = mod
+                    existing.Data = data
+                    existing.InGame = true
+                    existing.Id = itemId
+                    if itemId then State.Emotes.ById[tostring(itemId)] = existing end
+                else
+                    local newEntry = {
+                        Module = mod,
+                        Name = rawName,
+                        DisplayName = tostring(displayName),
+                        Category = "In-Game Live",
+                        Id = itemId,
+                        Data = data,
+                        CleanName = cRaw,
+                        CleanDisplay = cDisp,
+                        InGame = true,
+                        Type = "Emote"
+                    }
+                    State.Emotes.ByClean[cRaw] = newEntry
+                    State.Emotes.ByClean[cDisp] = newEntry
+                    if itemId then State.Emotes.ById[tostring(itemId)] = newEntry end
+                    table.insert(State.Emotes.List, newEntry)
+                end
+            elseif isUnusual then
+                local existing = State.Unusuals.ByClean[cDisp] or State.Unusuals.ByClean[cRaw] or State.Unusuals.ByClean[cMod]
+                if existing then
+                    existing.Module = mod
+                    existing.Data = data
+                    existing.InGame = true
+                    existing.Id = itemId
+                    if itemId then State.Unusuals.ById[tostring(itemId)] = existing end
+                else
+                    local newEntry = {
+                        Module = mod,
+                        Name = rawName,
+                        DisplayName = tostring(displayName),
+                        Category = "In-Game Live",
+                        Id = itemId,
+                        Data = data,
+                        CleanName = cRaw,
+                        CleanDisplay = cDisp,
+                        InGame = true,
+                        Type = "Unusual"
+                    }
+                    State.Unusuals.ByClean[cRaw] = newEntry
+                    State.Unusuals.ByClean[cDisp] = newEntry
+                    if itemId then State.Unusuals.ById[tostring(itemId)] = newEntry end
+                    table.insert(State.Unusuals.List, newEntry)
+                end
+            end
+        end)
+    end
+
+    -- 1. Scan Items Folder
+    local itemsFolder = ReplicatedStorage:FindFirstChild("Items")
+    if itemsFolder then
+        for _, desc in ipairs(itemsFolder:GetDescendants()) do
+            if desc:IsA("ModuleScript") then
+                registerModule(desc)
+            end
+        end
+    end
+
+    -- 2. Scan Registry if present
+    local registry = ReplicatedStorage:FindFirstChild("Registry")
+    if registry and registry:IsA("ModuleScript") then
+        pcall(function()
+            local reg = require(registry)
+            if type(reg.GetAll) == "function" then
+                for _, item in ipairs(reg:GetAll()) do
+                    if item.Module then
+                        if item.Type == "Emote" then
+                            registerModule(item.Module, "Emote")
+                        elseif item.Type == "Unusual" or item.Type == "Cosmetic" then
+                            registerModule(item.Module, "Unusual")
+                        else
+                            registerModule(item.Module)
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    -- 3. Fallback scan all descendants in ReplicatedStorage
+    for _, desc in ipairs(ReplicatedStorage:GetDescendants()) do
+        if desc:IsA("ModuleScript") then
+            local pName = desc.Parent.Name:lower()
+            local mName = desc.Name:lower()
+            if pName:find("emote") or mName:find("emote") or pName:find("unusual") or mName:find("unusual") or pName:find("cosmetic") or mName:find("cosmetic") then
+                registerModule(desc)
+            end
+        end
+    end
+
+    table.sort(State.Emotes.List, function(a, b)
+        return a.DisplayName:lower() < b.DisplayName:lower()
+    end)
+    table.sort(State.Unusuals.List, function(a, b)
+        return a.DisplayName:lower() < b.DisplayName:lower()
+    end)
+end
+
+scanGameCosmetics()
+
+--------------------------------------------------------------------------------
+-- RESOLUTION HELPERS (Fuzzy & Alias Lookup)
+--------------------------------------------------------------------------------
+local function resolveItem(itemType, query)
+    if not query or query:gsub("%s+", "") == "" then return nil end
+    local scope = (itemType == "Emote") and State.Emotes or State.Unusuals
+    local aliases = (itemType == "Emote") and ALIASES.Emotes or ALIASES.Unusuals
+    local cleanQ = cleanName(query)
+
+    -- Check alias mapping
+    if aliases[cleanQ] then
+        local targetName = aliases[cleanQ]
+        local found = scope.ByClean[cleanName(targetName)]
+        if found then return found end
+    end
+
+    -- Direct clean match
+    if scope.ByClean[cleanQ] then
+        return scope.ByClean[cleanQ]
+    end
+
+    -- Direct ID match
+    if scope.ById[query] then
+        return scope.ById[query]
+    end
+
+    -- Prefix match
+    for _, item in ipairs(scope.List) do
+        if item.CleanDisplay:find("^" .. cleanQ) or item.CleanName:find("^" .. cleanQ) then
+            return item
+        end
+    end
+
+    -- Substring match
+    for _, item in ipairs(scope.List) do
+        if item.CleanDisplay:find(cleanQ, 1, true) or item.CleanName:find(cleanQ, 1, true) then
+            return item
+        end
+    end
+
+    return nil
+end
+
+--------------------------------------------------------------------------------
+-- PHYSICAL SWAPPING ENGINE (Emotes & Unusuals)
+--------------------------------------------------------------------------------
+local function physicalSwapEmote(origEmote, repEmote)
+    if not origEmote or not repEmote then return false, "Invalid emote arguments." end
+
+    local origMod = origEmote.Module
+    local repMod = repEmote.Module
+
+    if not origMod then
+        return false, string.format("Original emote '%s' is not loaded in game memory.", origEmote.DisplayName)
+    end
+    if not repMod then
+        return false, string.format("Replacement emote '%s' is not loaded in game memory.", repEmote.DisplayName)
+    end
+
+    -- 1. Backup original data & sounds
+    if not State.Emotes.Backups[origEmote.CleanName] then
+        local origData = pcall(require, origMod) and require(origMod) or {}
+        local backupFolder = Instance.new("Folder")
+        backupFolder.Name = "__OriginalBackup"
+
+        local dataVal = Instance.new("StringValue")
+        dataVal.Name = "OriginalDataJSON"
+        pcall(function() dataVal.Value = HttpService:JSONEncode(origData) end)
+        dataVal.Parent = backupFolder
+
+        local soundVal = Instance.new("StringValue")
+        soundVal.Name = "OriginalSoundsJSON"
+        local sounds = {}
+        for _, sound in ipairs(origMod:GetDescendants()) do
+            if sound:IsA("Sound") then
+                table.insert(sounds, { Name = sound.Name, SoundId = sound.SoundId })
+            end
+        end
+        pcall(function() soundVal.Value = HttpService:JSONEncode(sounds) end)
+        soundVal.Parent = backupFolder
+
+        backupFolder.Parent = origMod
+        State.Emotes.Backups[origEmote.CleanName] = {
+            SavedData = origData,
+            Folder = backupFolder
+        }
+    end
+
+    -- 2. Physical Module & Asset Swap
+    local swapOk, err = pcall(function()
+        local repData = require(repMod)
+        local origData = require(origMod)
+        if typeof(origData) == "table" and typeof(repData) == "table" then
+            table.clear(origData)
+            for k, v in pairs(repData) do
+                if typeof(v) == "table" then
+                    local tblClone = {}
+                    for tk, tv in pairs(v) do
+                        tblClone[tk] = tv
+                    end
+                    origData[k] = tblClone
+                else
+                    origData[k] = v
+                end
+            end
+
+            -- Display the name of the SWAPPED (target/replacement) emote
+            if origData.AppearanceInfo then
+                origData.AppearanceInfo.Name = repEmote.DisplayName
+            else
+                origData.AppearanceInfo = { Name = repEmote.DisplayName }
+            end
+            origData.DisplayName = repEmote.DisplayName
+            origData.Name = repEmote.Name or repEmote.DisplayName
+        end
+
+        for _, child in ipairs(origMod:GetChildren()) do
+            if child.Name ~= "__OriginalBackup" then
+                child:Destroy()
+            end
+        end
+        for _, child in ipairs(repMod:GetChildren()) do
+            if child.Name ~= "__OriginalBackup" then
+                local clone = child:Clone()
+                clone.Parent = origMod
+            end
+        end
+
+        -- Update any existing in-game UI labels in PlayerGui to show the swapped name
+        updateInGameUILabels(origEmote.DisplayName, repEmote.DisplayName)
+    end)
+
+    if not swapOk then
+        return false, "Swap error: " .. tostring(err)
+    end
+
+    State.Emotes.Map[origEmote.CleanName] = {
+        Orig = origEmote,
+        Rep = repEmote
+    }
+
+    print(string.format("[Cosmetic Changer] Swapped Emote: %s -> %s", origEmote.DisplayName, repEmote.DisplayName))
+    return true
+end
+
+local function physicalSwapUnusual(origUnusual, repUnusual)
+    if not origUnusual or not repUnusual then return false, "Invalid unusual arguments." end
+
+    local origMod = origUnusual.Module
+    local repMod = repUnusual.Module
+
+    if not origMod then
+        return false, string.format("Original unusual '%s' is not loaded in game memory.", origUnusual.DisplayName)
+    end
+    if not repMod then
+        return false, string.format("Replacement unusual '%s' is not loaded in game memory.", repUnusual.DisplayName)
+    end
+
+    -- 1. Backup original data
+    if not State.Unusuals.Backups[origUnusual.CleanName] then
+        local origData = pcall(require, origMod) and require(origMod) or {}
+        local backupFolder = Instance.new("Folder")
+        backupFolder.Name = "__OriginalBackup"
+
+        local dataVal = Instance.new("StringValue")
+        dataVal.Name = "OriginalDataJSON"
+        pcall(function() dataVal.Value = HttpService:JSONEncode(origData) end)
+        dataVal.Parent = backupFolder
+
+        backupFolder.Parent = origMod
+        State.Unusuals.Backups[origUnusual.CleanName] = {
+            SavedData = origData,
+            Folder = backupFolder
+        }
+    end
+
+    -- 2. Physical Module & Asset Swap
+    local swapOk, err = pcall(function()
+        local repData = require(repMod)
+        local origData = require(origMod)
+        if typeof(origData) == "table" and typeof(repData) == "table" then
+            table.clear(origData)
+            for k, v in pairs(repData) do
+                if typeof(v) == "table" then
+                    local tblClone = {}
+                    for tk, tv in pairs(v) do
+                        tblClone[tk] = tv
+                    end
+                    origData[k] = tblClone
+                else
+                    origData[k] = v
+                end
+            end
+
+            -- Display the name of the SWAPPED (target/replacement) unusual
+            if origData.AppearanceInfo then
+                origData.AppearanceInfo.Name = repUnusual.DisplayName
+            else
+                origData.AppearanceInfo = { Name = repUnusual.DisplayName }
+            end
+            origData.DisplayName = repUnusual.DisplayName
+            origData.Name = repUnusual.Name or repUnusual.DisplayName
+        end
+
+        for _, child in ipairs(origMod:GetChildren()) do
+            if child.Name ~= "__OriginalBackup" then
+                child:Destroy()
+            end
+        end
+        for _, child in ipairs(repMod:GetChildren()) do
+            if child.Name ~= "__OriginalBackup" then
+                local clone = child:Clone()
+                clone.Parent = origMod
+            end
+        end
+
+        -- Update any existing in-game UI labels in PlayerGui to show the swapped name
+        updateInGameUILabels(origUnusual.DisplayName, repUnusual.DisplayName)
+    end)
+
+    if not swapOk then
+        return false, "Swap error: " .. tostring(err)
+    end
+
+    State.Unusuals.Map[origUnusual.CleanName] = {
+        Orig = origUnusual,
+        Rep = repUnusual
+    }
+
+    refreshRig()
+    print(string.format("[Cosmetic Changer] Swapped Unusual: %s -> %s", origUnusual.DisplayName, repUnusual.DisplayName))
+    return true
+end
+
+--------------------------------------------------------------------------------
+-- RESTORE LOGIC
+--------------------------------------------------------------------------------
+local function restoreEmote(origName)
+    local clean = cleanName(origName)
+    local swapData = State.Emotes.Map[clean]
+    if not swapData then return false end
+
+    local origEmote = swapData.Orig
+    local repEmote = swapData.Rep
+    local origMod = origEmote.Module
+    local backup = State.Emotes.Backups[clean]
+
+    if origMod and backup and backup.SavedData then
+        pcall(function()
+            local origData = require(origMod)
+            table.clear(origData)
+            for k, v in pairs(backup.SavedData) do
+                origData[k] = v
+            end
+
+            for _, child in ipairs(origMod:GetChildren()) do
+                if child.Name ~= "__OriginalBackup" then
+                    child:Destroy()
+                end
+            end
+            if backup.Folder then
+                backup.Folder:Destroy()
+            end
+
+            -- Revert UI labels back to original name
+            updateInGameUILabels(repEmote.DisplayName, origEmote.DisplayName)
+        end)
+    end
+
+    State.Emotes.Map[clean] = nil
+    State.Emotes.Backups[clean] = nil
+    print(string.format("[Cosmetic Changer] Emote restored: %s", origEmote.DisplayName))
+    return true
+end
+
+local function restoreUnusual(origName)
+    local clean = cleanName(origName)
+    local swapData = State.Unusuals.Map[clean]
+    if not swapData then return false end
+
+    local origUnusual = swapData.Orig
+    local repUnusual = swapData.Rep
+    local origMod = origUnusual.Module
+    local backup = State.Unusuals.Backups[clean]
+
+    if origMod and backup and backup.SavedData then
+        pcall(function()
+            local origData = require(origMod)
+            table.clear(origData)
+            for k, v in pairs(backup.SavedData) do
+                origData[k] = v
+            end
+
+            for _, child in ipairs(origMod:GetChildren()) do
+                if child.Name ~= "__OriginalBackup" then
+                    child:Destroy()
+                end
+            end
+            if backup.Folder then
+                backup.Folder:Destroy()
+            end
+
+            -- Revert UI labels back to original name
+            updateInGameUILabels(repUnusual.DisplayName, origUnusual.DisplayName)
+        end)
+    end
+
+    State.Unusuals.Map[clean] = nil
+    State.Unusuals.Backups[clean] = nil
+    refreshRig()
+    print(string.format("[Cosmetic Changer] Unusual restored: %s", origUnusual.DisplayName))
+    return true
+end
+
+local function restoreAllEmotes()
+    for clean, _ in pairs(State.Emotes.Map) do
+        restoreEmote(clean)
+    end
+    table.clear(State.Emotes.Map)
+    table.clear(State.Emotes.Backups)
+end
+
+local function restoreAllUnusuals()
+    for clean, _ in pairs(State.Unusuals.Map) do
+        restoreUnusual(clean)
+    end
+    table.clear(State.Unusuals.Map)
+    table.clear(State.Unusuals.Backups)
+    refreshRig()
+end
+
+local function restoreEverything()
+    restoreAllEmotes()
+    restoreAllUnusuals()
+    print("[Cosmetic Changer] All Emotes & Unusuals have been restored to default.")
+end
+
+--------------------------------------------------------------------------------
+-- USER INTERFACE CONSTRUCTION
+--------------------------------------------------------------------------------
+local function buildGUI()
+    local existing = CoreGui:FindFirstChild("larpgxng")
+    if existing then existing:Destroy() end
+
+    -- Typography: Helvetica (with Luau runtime safety fallback to Arial/SourceSans)
+    local Helvetica = (function()
+        local ok, f = pcall(function() return Enum.Font.Helvetica end)
+        if ok and f then return f end
+        local okArial, a = pcall(function() return Enum.Font.Arial end)
+        if okArial and a then return a end
+        return Enum.Font.SourceSans
+    end)()
+
+    local HelveticaBold = (function()
+        local ok, f = pcall(function() return Enum.Font.HelveticaBold end)
+        if ok and f then return f end
+        local okArial, a = pcall(function() return Enum.Font.ArialBold end)
+        if okArial and a then return a end
+        return Enum.Font.SourceSansBold
+    end)()
+
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "larpgxng"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+    pcall(function()
+        if syn and syn.protect_gui then
+            syn.protect_gui(ScreenGui)
+        end
+    end)
+    local mountOk = pcall(function() ScreenGui.Parent = CoreGui end)
+    if not mountOk or not ScreenGui.Parent then
+        ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    end
+
+    -- Main Window
+    local Main = Instance.new("Frame")
+    Main.Name = "MainFrame"
+    Main.Size = UDim2.new(0, 420, 0, 550)
+    Main.Position = UDim2.new(0.5, -210, 0.5, -275)
+    Main.BackgroundColor3 = Color3.fromRGB(14, 14, 14)
+    Main.BorderSizePixel = 0
+    Main.Active = true
+    Main.Draggable = true
+    Main.ClipsDescendants = false
+    Main.Parent = ScreenGui
+
+    local MainCorner = Instance.new("UICorner")
+    MainCorner.CornerRadius = UDim.new(0, 10)
+    MainCorner.Parent = Main
+
+    local MainStroke = Instance.new("UIStroke")
+    MainStroke.Color = Color3.fromRGB(50, 50, 50)
+    MainStroke.Thickness = 1.3
+    MainStroke.Parent = Main
+
+    -- Header Frame
+    local Header = Instance.new("Frame")
+    Header.Name = "Header"
+    Header.Size = UDim2.new(1, 0, 0, 46)
+    Header.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    Header.BorderSizePixel = 0
+    Header.Parent = Main
+
+    local HeaderCorner = Instance.new("UICorner")
+    HeaderCorner.CornerRadius = UDim.new(0, 10)
+    HeaderCorner.Parent = Header
+
+    local Title = Instance.new("TextLabel")
+    Title.Name = "Title"
+    Title.Size = UDim2.new(1, -110, 0, 24)
+    Title.Position = UDim2.new(0, 14, 0, 4)
+    Title.BackgroundTransparency = 1
+    Title.Text = "evade larptool"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.Font = HelveticaBold
+    Title.TextSize = 14
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.Parent = Header
+
+    local Subtitle = Instance.new("TextLabel")
+    Subtitle.Name = "Subtitle"
+    Subtitle.Size = UDim2.new(1, -110, 0, 16)
+    Subtitle.Position = UDim2.new(0, 14, 0, 24)
+    Subtitle.BackgroundTransparency = 1
+    Subtitle.Text = "snivy mabar yahahayuk"
+    Subtitle.TextColor3 = Color3.fromRGB(160, 160, 160)
+    Subtitle.Font = Helvetica
+    Subtitle.TextSize = 10
+    Subtitle.TextXAlignment = Enum.TextXAlignment.Left
+    Subtitle.Parent = Header
+
+    local MinBtn = Instance.new("TextButton")
+    MinBtn.Name = "MinimizeBtn"
+    MinBtn.Size = UDim2.new(0, 28, 0, 28)
+    MinBtn.Position = UDim2.new(1, -68, 0, 9)
+    MinBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    MinBtn.Text = "-"
+    MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    MinBtn.Font = HelveticaBold
+    MinBtn.TextSize = 16
+    MinBtn.Parent = Header
+
+    local MinCorner = Instance.new("UICorner")
+    MinCorner.CornerRadius = UDim.new(0, 6)
+    MinCorner.Parent = MinBtn
+
+    local CloseBtn = Instance.new("TextButton")
+    CloseBtn.Name = "CloseBtn"
+    CloseBtn.Size = UDim2.new(0, 28, 0, 28)
+    CloseBtn.Position = UDim2.new(1, -34, 0, 9)
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    CloseBtn.Text = "X"
+    CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CloseBtn.Font = HelveticaBold
+    CloseBtn.TextSize = 12
+    CloseBtn.Parent = Header
+
+    local CloseCorner = Instance.new("UICorner")
+    CloseCorner.CornerRadius = UDim.new(0, 6)
+    CloseCorner.Parent = CloseBtn
+
+    CloseBtn.MouseButton1Click:Connect(function()
+        ScreenGui.Enabled = false
+    end)
+
+    -- Top Tab Bar
+    local TabBar = Instance.new("Frame")
+    TabBar.Name = "TabBar"
+    TabBar.Size = UDim2.new(1, -24, 0, 32)
+    TabBar.Position = UDim2.new(0, 12, 0, 52)
+    TabBar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    TabBar.Parent = Main
+
+    local TabBarCorner = Instance.new("UICorner")
+    TabBarCorner.CornerRadius = UDim.new(0, 6)
+    TabBarCorner.Parent = TabBar
+
+    local EmotesTabBtn = Instance.new("TextButton")
+    EmotesTabBtn.Name = "EmotesTabBtn"
+    EmotesTabBtn.Size = UDim2.new(0.333, -2, 1, 0)
+    EmotesTabBtn.Position = UDim2.new(0, 0, 0, 0)
+    EmotesTabBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    EmotesTabBtn.Text = "🎭 Emotes (212)"
+    EmotesTabBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+    EmotesTabBtn.Font = HelveticaBold
+    EmotesTabBtn.TextSize = 11
+    EmotesTabBtn.Parent = TabBar
+
+    local Tab1Corner = Instance.new("UICorner")
+    Tab1Corner.CornerRadius = UDim.new(0, 6)
+    Tab1Corner.Parent = EmotesTabBtn
+
+    local UnusualsTabBtn = Instance.new("TextButton")
+    UnusualsTabBtn.Name = "UnusualsTabBtn"
+    UnusualsTabBtn.Size = UDim2.new(0.333, -2, 1, 0)
+    UnusualsTabBtn.Position = UDim2.new(0.333, 1, 0, 0)
+    UnusualsTabBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 26)
+    UnusualsTabBtn.Text = "✨ Unusuals (247)"
+    UnusualsTabBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
+    UnusualsTabBtn.Font = HelveticaBold
+    UnusualsTabBtn.TextSize = 11
+    UnusualsTabBtn.Parent = TabBar
+
+    local Tab2Corner = Instance.new("UICorner")
+    Tab2Corner.CornerRadius = UDim.new(0, 6)
+    Tab2Corner.Parent = UnusualsTabBtn
+
+    local SwapsTabBtn = Instance.new("TextButton")
+    SwapsTabBtn.Name = "SwapsTabBtn"
+    SwapsTabBtn.Size = UDim2.new(0.333, -2, 1, 0)
+    SwapsTabBtn.Position = UDim2.new(0.666, 2, 0, 0)
+    SwapsTabBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 26)
+    SwapsTabBtn.Text = "🔄 Active Swaps (0)"
+    SwapsTabBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
+    SwapsTabBtn.Font = HelveticaBold
+    SwapsTabBtn.TextSize = 11
+    SwapsTabBtn.Parent = TabBar
+
+    local Tab3Corner = Instance.new("UICorner")
+    Tab3Corner.CornerRadius = UDim.new(0, 6)
+    Tab3Corner.Parent = SwapsTabBtn
+
+    -- Content Container
+    local Content = Instance.new("Frame")
+    Content.Name = "Content"
+    Content.Size = UDim2.new(1, 0, 1, -92)
+    Content.Position = UDim2.new(0, 0, 0, 92)
+    Content.BackgroundTransparency = 1
+    Content.Parent = Main
+
+    ----------------------------------------------------------------------------
+    -- TAB 1: EMOTES VIEW
+    ----------------------------------------------------------------------------
+    local EmotesView = Instance.new("Frame")
+    EmotesView.Name = "EmotesView"
+    EmotesView.Size = UDim2.new(1, 0, 1, 0)
+    EmotesView.BackgroundTransparency = 1
+    EmotesView.Visible = true
+    EmotesView.Parent = Content
+
+    local EmoteStatus = Instance.new("TextLabel")
+    EmoteStatus.Name = "EmoteStatus"
+    EmoteStatus.Size = UDim2.new(1, -28, 0, 20)
+    EmoteStatus.Position = UDim2.new(0, 14, 0, 2)
+    EmoteStatus.BackgroundTransparency = 1
+    EmoteStatus.Text = "Status: Ready to swap emotes."
+    EmoteStatus.TextColor3 = Color3.fromRGB(160, 160, 160)
+    EmoteStatus.Font = Helvetica
+    EmoteStatus.TextSize = 11
+    EmoteStatus.TextXAlignment = Enum.TextXAlignment.Left
+    EmoteStatus.Parent = EmotesView
+
+    local EmoteOrigBox = Instance.new("TextBox")
+    EmoteOrigBox.Name = "EmoteOrigBox"
+    EmoteOrigBox.Size = UDim2.new(1, -28, 0, 36)
+    EmoteOrigBox.Position = UDim2.new(0, 14, 0, 24)
+    EmoteOrigBox.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    EmoteOrigBox.PlaceholderText = "Original Emote (e.g. Griddy / Sit / Clap)"
+    EmoteOrigBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+    EmoteOrigBox.Text = ""
+    EmoteOrigBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    EmoteOrigBox.Font = Helvetica
+    EmoteOrigBox.TextSize = 13
+    EmoteOrigBox.ClearTextOnFocus = false
+    EmoteOrigBox.Parent = EmotesView
+
+    local EOrigCorner = Instance.new("UICorner")
+    EOrigCorner.CornerRadius = UDim.new(0, 6)
+    EOrigCorner.Parent = EmoteOrigBox
+
+    local EmoteRepBox = Instance.new("TextBox")
+    EmoteRepBox.Name = "EmoteRepBox"
+    EmoteRepBox.Size = UDim2.new(1, -28, 0, 36)
+    EmoteRepBox.Position = UDim2.new(0, 14, 0, 64)
+    EmoteRepBox.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    EmoteRepBox.PlaceholderText = "Replacement Emote (e.g. Rockin' Stride / Caramelldansen)"
+    EmoteRepBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+    EmoteRepBox.Text = ""
+    EmoteRepBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    EmoteRepBox.Font = Helvetica
+    EmoteRepBox.TextSize = 13
+    EmoteRepBox.ClearTextOnFocus = false
+    EmoteRepBox.Parent = EmotesView
+
+    local ERepCorner = Instance.new("UICorner")
+    ERepCorner.CornerRadius = UDim.new(0, 6)
+    ERepCorner.Parent = EmoteRepBox
+
+    local EmotePickerBtn = Instance.new("TextButton")
+    EmotePickerBtn.Name = "EmotePickerBtn"
+    EmotePickerBtn.Size = UDim2.new(1, -28, 0, 28)
+    EmotePickerBtn.Position = UDim2.new(0, 14, 0, 104)
+    EmotePickerBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    EmotePickerBtn.Text = "🔍 Browse All Emotes Catalog (212 Items)"
+    EmotePickerBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+    EmotePickerBtn.Font = Helvetica
+    EmotePickerBtn.TextSize = 12
+    EmotePickerBtn.Parent = EmotesView
+
+    local EPickCorner = Instance.new("UICorner")
+    EPickCorner.CornerRadius = UDim.new(0, 6)
+    EPickCorner.Parent = EmotePickerBtn
+
+    local EmoteSwapBtn = Instance.new("TextButton")
+    EmoteSwapBtn.Name = "EmoteSwapBtn"
+    EmoteSwapBtn.Size = UDim2.new(1, -28, 0, 34)
+    EmoteSwapBtn.Position = UDim2.new(0, 14, 0, 136)
+    EmoteSwapBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    EmoteSwapBtn.Text = "Swap Emote (Physical Swap)"
+    EmoteSwapBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+    EmoteSwapBtn.Font = HelveticaBold
+    EmoteSwapBtn.TextSize = 13
+    EmoteSwapBtn.Parent = EmotesView
+
+    local ESwapCorner = Instance.new("UICorner")
+    ESwapCorner.CornerRadius = UDim.new(0, 6)
+    ESwapCorner.Parent = EmoteSwapBtn
+
+    local EmoteToggleBtn = Instance.new("TextButton")
+    EmoteToggleBtn.Name = "EmoteToggleBtn"
+    EmoteToggleBtn.Size = UDim2.new(0.48, -14, 0, 30)
+    EmoteToggleBtn.Position = UDim2.new(0, 14, 0, 174)
+    EmoteToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    EmoteToggleBtn.Text = "Status: ENABLED"
+    EmoteToggleBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+    EmoteToggleBtn.Font = HelveticaBold
+    EmoteToggleBtn.TextSize = 11
+    EmoteToggleBtn.Parent = EmotesView
+
+    local EToggleCorner = Instance.new("UICorner")
+    EToggleCorner.CornerRadius = UDim.new(0, 6)
+    EToggleCorner.Parent = EmoteToggleBtn
+
+    local EmoteResetAllBtn = Instance.new("TextButton")
+    EmoteResetAllBtn.Name = "EmoteResetAllBtn"
+    EmoteResetAllBtn.Size = UDim2.new(0.45, 0, 0, 30)
+    EmoteResetAllBtn.Position = UDim2.new(0.52, 0, 0, 174)
+    EmoteResetAllBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    EmoteResetAllBtn.Text = "RESET ALL EMOTES"
+    EmoteResetAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    EmoteResetAllBtn.Font = HelveticaBold
+    EmoteResetAllBtn.TextSize = 11
+    EmoteResetAllBtn.Parent = EmotesView
+
+    local EResetCorner = Instance.new("UICorner")
+    EResetCorner.CornerRadius = UDim.new(0, 6)
+    EResetCorner.Parent = EmoteResetAllBtn
+
+    local EmoteListTitle = Instance.new("TextLabel")
+    EmoteListTitle.Name = "EmoteListTitle"
+    EmoteListTitle.Size = UDim2.new(1, -28, 0, 18)
+    EmoteListTitle.Position = UDim2.new(0, 14, 0, 210)
+    EmoteListTitle.BackgroundTransparency = 1
+    EmoteListTitle.Text = "Active Swapped Emotes:"
+    EmoteListTitle.TextColor3 = Color3.fromRGB(220, 220, 220)
+    EmoteListTitle.Font = HelveticaBold
+    EmoteListTitle.TextSize = 12
+    EmoteListTitle.TextXAlignment = Enum.TextXAlignment.Left
+    EmoteListTitle.Parent = EmotesView
+
+    local EmoteScrollList = Instance.new("ScrollingFrame")
+    EmoteScrollList.Name = "EmoteScrollList"
+    EmoteScrollList.Size = UDim2.new(1, -28, 1, -242)
+    EmoteScrollList.Position = UDim2.new(0, 14, 0, 232)
+    EmoteScrollList.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+    EmoteScrollList.BorderSizePixel = 0
+    EmoteScrollList.ScrollBarThickness = 4
+    EmoteScrollList.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
+    EmoteScrollList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    EmoteScrollList.Parent = EmotesView
+
+    local EScrollCorner = Instance.new("UICorner")
+    EScrollCorner.CornerRadius = UDim.new(0, 6)
+    EScrollCorner.Parent = EmoteScrollList
+
+    local EListLayout = Instance.new("UIListLayout")
+    EListLayout.Padding = UDim.new(0, 4)
+    EListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    EListLayout.Parent = EmoteScrollList
+
+    EListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        EmoteScrollList.CanvasSize = UDim2.new(0, 0, 0, EListLayout.AbsoluteContentSize.Y + 8)
+    end)
+
+    ----------------------------------------------------------------------------
+    -- TAB 2: UNUSUALS VIEW
+    ----------------------------------------------------------------------------
+    local UnusualsView = Instance.new("Frame")
+    UnusualsView.Name = "UnusualsView"
+    UnusualsView.Size = UDim2.new(1, 0, 1, 0)
+    UnusualsView.BackgroundTransparency = 1
+    UnusualsView.Visible = false
+    UnusualsView.Parent = Content
+
+    local UnusualStatus = Instance.new("TextLabel")
+    UnusualStatus.Name = "UnusualStatus"
+    UnusualStatus.Size = UDim2.new(1, -28, 0, 20)
+    UnusualStatus.Position = UDim2.new(0, 14, 0, 2)
+    UnusualStatus.BackgroundTransparency = 1
+    UnusualStatus.Text = "Status: Ready to swap unusuals."
+    UnusualStatus.TextColor3 = Color3.fromRGB(160, 160, 160)
+    UnusualStatus.Font = Helvetica
+    UnusualStatus.TextSize = 11
+    UnusualStatus.TextXAlignment = Enum.TextXAlignment.Left
+    UnusualStatus.Parent = UnusualsView
+
+    local UnusualOrigBox = Instance.new("TextBox")
+    UnusualOrigBox.Name = "UnusualOrigBox"
+    UnusualOrigBox.Size = UDim2.new(1, -28, 0, 36)
+    UnusualOrigBox.Position = UDim2.new(0, 14, 0, 24)
+    UnusualOrigBox.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    UnusualOrigBox.PlaceholderText = "Original Unusual (e.g. Bubbly / Party / Voltaic)"
+    UnusualOrigBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+    UnusualOrigBox.Text = ""
+    UnusualOrigBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    UnusualOrigBox.Font = Helvetica
+    UnusualOrigBox.TextSize = 13
+    UnusualOrigBox.ClearTextOnFocus = false
+    UnusualOrigBox.Parent = UnusualsView
+
+    local UOrigCorner = Instance.new("UICorner")
+    UOrigCorner.CornerRadius = UDim.new(0, 6)
+    UOrigCorner.Parent = UnusualOrigBox
+
+    local UnusualRepBox = Instance.new("TextBox")
+    UnusualRepBox.Name = "UnusualRepBox"
+    UnusualRepBox.Size = UDim2.new(1, -28, 0, 36)
+    UnusualRepBox.Position = UDim2.new(0, 14, 0, 64)
+    UnusualRepBox.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    UnusualRepBox.PlaceholderText = "Replacement Unusual (e.g. CCHaze / Astral Nebula)"
+    UnusualRepBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+    UnusualRepBox.Text = ""
+    UnusualRepBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    UnusualRepBox.Font = Helvetica
+    UnusualRepBox.TextSize = 13
+    UnusualRepBox.ClearTextOnFocus = false
+    UnusualRepBox.Parent = UnusualsView
+
+    local URepCorner = Instance.new("UICorner")
+    URepCorner.CornerRadius = UDim.new(0, 6)
+    URepCorner.Parent = UnusualRepBox
+
+    local UnusualPickerBtn = Instance.new("TextButton")
+    UnusualPickerBtn.Name = "UnusualPickerBtn"
+    UnusualPickerBtn.Size = UDim2.new(1, -28, 0, 28)
+    UnusualPickerBtn.Position = UDim2.new(0, 14, 0, 104)
+    UnusualPickerBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    UnusualPickerBtn.Text = "🔍 Browse All Unusuals Catalog (247 Items)"
+    UnusualPickerBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+    UnusualPickerBtn.Font = Helvetica
+    UnusualPickerBtn.TextSize = 12
+    UnusualPickerBtn.Parent = UnusualsView
+
+    local UPickCorner = Instance.new("UICorner")
+    UPickCorner.CornerRadius = UDim.new(0, 6)
+    UPickCorner.Parent = UnusualPickerBtn
+
+    local UnusualSwapBtn = Instance.new("TextButton")
+    UnusualSwapBtn.Name = "UnusualSwapBtn"
+    UnusualSwapBtn.Size = UDim2.new(1, -28, 0, 34)
+    UnusualSwapBtn.Position = UDim2.new(0, 14, 0, 136)
+    UnusualSwapBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    UnusualSwapBtn.Text = "Swap Unusual (Live Swap)"
+    UnusualSwapBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+    UnusualSwapBtn.Font = HelveticaBold
+    UnusualSwapBtn.TextSize = 13
+    UnusualSwapBtn.Parent = UnusualsView
+
+    local USwapCorner = Instance.new("UICorner")
+    USwapCorner.CornerRadius = UDim.new(0, 6)
+    USwapCorner.Parent = UnusualSwapBtn
+
+    local UnusualToggleBtn = Instance.new("TextButton")
+    UnusualToggleBtn.Name = "UnusualToggleBtn"
+    UnusualToggleBtn.Size = UDim2.new(0.48, -14, 0, 30)
+    UnusualToggleBtn.Position = UDim2.new(0, 14, 0, 174)
+    UnusualToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    UnusualToggleBtn.Text = "Status: ENABLED"
+    UnusualToggleBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+    UnusualToggleBtn.Font = HelveticaBold
+    UnusualToggleBtn.TextSize = 11
+    UnusualToggleBtn.Parent = UnusualsView
+
+    local UToggleCorner = Instance.new("UICorner")
+    UToggleCorner.CornerRadius = UDim.new(0, 6)
+    UToggleCorner.Parent = UnusualToggleBtn
+
+    local UnusualResetAllBtn = Instance.new("TextButton")
+    UnusualResetAllBtn.Name = "UnusualResetAllBtn"
+    UnusualResetAllBtn.Size = UDim2.new(0.45, 0, 0, 30)
+    UnusualResetAllBtn.Position = UDim2.new(0.52, 0, 0, 174)
+    UnusualResetAllBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    UnusualResetAllBtn.Text = "RESET ALL UNUSUALS"
+    UnusualResetAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    UnusualResetAllBtn.Font = HelveticaBold
+    UnusualResetAllBtn.TextSize = 11
+    UnusualResetAllBtn.Parent = UnusualsView
+
+    local UResetCorner = Instance.new("UICorner")
+    UResetCorner.CornerRadius = UDim.new(0, 6)
+    UResetCorner.Parent = UnusualResetAllBtn
+
+    local UnusualListTitle = Instance.new("TextLabel")
+    UnusualListTitle.Name = "UnusualListTitle"
+    UnusualListTitle.Size = UDim2.new(1, -28, 0, 18)
+    UnusualListTitle.Position = UDim2.new(0, 14, 0, 210)
+    UnusualListTitle.BackgroundTransparency = 1
+    UnusualListTitle.Text = "Active Swapped Unusuals:"
+    UnusualListTitle.TextColor3 = Color3.fromRGB(220, 220, 220)
+    UnusualListTitle.Font = HelveticaBold
+    UnusualListTitle.TextSize = 12
+    UnusualListTitle.TextXAlignment = Enum.TextXAlignment.Left
+    UnusualListTitle.Parent = UnusualsView
+
+    local UnusualScrollList = Instance.new("ScrollingFrame")
+    UnusualScrollList.Name = "UnusualScrollList"
+    UnusualScrollList.Size = UDim2.new(1, -28, 1, -242)
+    UnusualScrollList.Position = UDim2.new(0, 14, 0, 232)
+    UnusualScrollList.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+    UnusualScrollList.BorderSizePixel = 0
+    UnusualScrollList.ScrollBarThickness = 4
+    UnusualScrollList.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
+    UnusualScrollList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    UnusualScrollList.Parent = UnusualsView
+
+    local UScrollCorner = Instance.new("UICorner")
+    UScrollCorner.CornerRadius = UDim.new(0, 6)
+    UScrollCorner.Parent = UnusualScrollList
+
+    local UListLayout = Instance.new("UIListLayout")
+    UListLayout.Padding = UDim.new(0, 4)
+    UListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    UListLayout.Parent = UnusualScrollList
+
+    UListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        UnusualScrollList.CanvasSize = UDim2.new(0, 0, 0, UListLayout.AbsoluteContentSize.Y + 8)
+    end)
+
+    ----------------------------------------------------------------------------
+    -- TAB 3: ACTIVE SWAPS OVERVIEW
+    ----------------------------------------------------------------------------
+    local SwapsView = Instance.new("Frame")
+    SwapsView.Name = "SwapsView"
+    SwapsView.Size = UDim2.new(1, 0, 1, 0)
+    SwapsView.BackgroundTransparency = 1
+    SwapsView.Visible = false
+    SwapsView.Parent = Content
+
+    local SwapsHeaderRow = Instance.new("Frame")
+    SwapsHeaderRow.Name = "SwapsHeaderRow"
+    SwapsHeaderRow.Size = UDim2.new(1, -28, 0, 34)
+    SwapsHeaderRow.Position = UDim2.new(0, 14, 0, 4)
+    SwapsHeaderRow.BackgroundTransparency = 1
+    SwapsHeaderRow.Parent = SwapsView
+
+    local MasterResetBtn = Instance.new("TextButton")
+    MasterResetBtn.Name = "MasterResetBtn"
+    MasterResetBtn.Size = UDim2.new(1, 0, 1, 0)
+    MasterResetBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    MasterResetBtn.Text = "RESET EVERYTHING (ALL EMOTES & UNUSUALS)"
+    MasterResetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    MasterResetBtn.Font = HelveticaBold
+    MasterResetBtn.TextSize = 12
+    MasterResetBtn.Parent = SwapsHeaderRow
+
+    local MResetCorner = Instance.new("UICorner")
+    MResetCorner.CornerRadius = UDim.new(0, 6)
+    MResetCorner.Parent = MasterResetBtn
+
+    local MasterScrollList = Instance.new("ScrollingFrame")
+    MasterScrollList.Name = "MasterScrollList"
+    MasterScrollList.Size = UDim2.new(1, -28, 1, -52)
+    MasterScrollList.Position = UDim2.new(0, 14, 0, 44)
+    MasterScrollList.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+    MasterScrollList.BorderSizePixel = 0
+    MasterScrollList.ScrollBarThickness = 4
+    MasterScrollList.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
+    MasterScrollList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    MasterScrollList.Parent = SwapsView
+
+    local MScrollCorner = Instance.new("UICorner")
+    MScrollCorner.CornerRadius = UDim.new(0, 6)
+    MScrollCorner.Parent = MasterScrollList
+
+    local MListLayout = Instance.new("UIListLayout")
+    MListLayout.Padding = UDim.new(0, 4)
+    MListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    MListLayout.Parent = MasterScrollList
+
+    MListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        MasterScrollList.CanvasSize = UDim2.new(0, 0, 0, MListLayout.AbsoluteContentSize.Y + 8)
+    end)
+
+    ----------------------------------------------------------------------------
+    -- BROWSE DRAWER (Sliding Side Panel with Filter Bar)
+    ----------------------------------------------------------------------------
+    local Drawer = Instance.new("Frame")
+    Drawer.Name = "CatalogDrawer"
+    Drawer.Size = UDim2.new(0, 375, 0, 550)
+    Drawer.Position = UDim2.new(1, 10, 0, 0)
+    Drawer.BackgroundColor3 = Color3.fromRGB(14, 14, 14)
+    Drawer.BorderSizePixel = 0
+    Drawer.Visible = false
+    Drawer.Parent = Main
+
+    local DrawerCorner = Instance.new("UICorner")
+    DrawerCorner.CornerRadius = UDim.new(0, 10)
+    DrawerCorner.Parent = Drawer
+
+    local DrawerStroke = Instance.new("UIStroke")
+    DrawerStroke.Color = Color3.fromRGB(50, 50, 50)
+    DrawerStroke.Thickness = 1.2
+    DrawerStroke.Parent = Drawer
+
+    local DrawerTitle = Instance.new("TextLabel")
+    DrawerTitle.Name = "DrawerTitle"
+    DrawerTitle.Size = UDim2.new(1, -40, 0, 32)
+    DrawerTitle.Position = UDim2.new(0, 12, 0, 6)
+    DrawerTitle.BackgroundTransparency = 1
+    DrawerTitle.Text = "Catalog Browser"
+    DrawerTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DrawerTitle.Font = HelveticaBold
+    DrawerTitle.TextSize = 13
+    DrawerTitle.TextXAlignment = Enum.TextXAlignment.Left
+    DrawerTitle.Parent = Drawer
+
+    local DrawerClose = Instance.new("TextButton")
+    DrawerClose.Size = UDim2.new(0, 24, 0, 24)
+    DrawerClose.Position = UDim2.new(1, -30, 0, 9)
+    DrawerClose.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+    DrawerClose.Text = "X"
+    DrawerClose.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DrawerClose.Font = HelveticaBold
+    DrawerClose.TextSize = 12
+    DrawerClose.Parent = Drawer
+
+    local DCloseCorner = Instance.new("UICorner")
+    DCloseCorner.CornerRadius = UDim.new(0, 6)
+    DCloseCorner.Parent = DrawerClose
+
+    DrawerClose.MouseButton1Click:Connect(function()
+        Drawer.Visible = false
+    end)
+
+    -- Category Filter Chips Bar
+    local FilterScroll = Instance.new("ScrollingFrame")
+    FilterScroll.Name = "FilterScroll"
+    FilterScroll.Size = UDim2.new(1, -24, 0, 26)
+    FilterScroll.Position = UDim2.new(0, 12, 0, 38)
+    FilterScroll.BackgroundTransparency = 1
+    FilterScroll.BorderSizePixel = 0
+    FilterScroll.ScrollBarThickness = 2
+    FilterScroll.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 60)
+    FilterScroll.CanvasSize = UDim2.new(0, 600, 0, 0)
+    FilterScroll.Parent = Drawer
+
+    local FilterLayout = Instance.new("UIListLayout")
+    FilterLayout.FillDirection = Enum.FillDirection.Horizontal
+    FilterLayout.Padding = UDim.new(0, 4)
+    FilterLayout.Parent = FilterScroll
+
+    FilterLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        FilterScroll.CanvasSize = UDim2.new(0, FilterLayout.AbsoluteContentSize.X + 8, 0, 0)
+    end)
+
+    local SearchBox = Instance.new("TextBox")
+    SearchBox.Name = "SearchBox"
+    SearchBox.Size = UDim2.new(1, -24, 0, 30)
+    SearchBox.Position = UDim2.new(0, 12, 0, 68)
+    SearchBox.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    SearchBox.PlaceholderText = "Search item name or category..."
+    SearchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+    SearchBox.Text = ""
+    SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SearchBox.Font = Helvetica
+    SearchBox.TextSize = 12
+    SearchBox.Parent = Drawer
+
+    local SCorner = Instance.new("UICorner")
+    SCorner.CornerRadius = UDim.new(0, 6)
+    SCorner.Parent = SearchBox
+
+    local DrawerScroll = Instance.new("ScrollingFrame")
+    DrawerScroll.Name = "DrawerScroll"
+    DrawerScroll.Size = UDim2.new(1, -24, 1, -112)
+    DrawerScroll.Position = UDim2.new(0, 12, 0, 104)
+    DrawerScroll.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+    DrawerScroll.BorderSizePixel = 0
+    DrawerScroll.ScrollBarThickness = 3
+    DrawerScroll.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
+    DrawerScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    DrawerScroll.Parent = Drawer
+
+    local DScrollCorner = Instance.new("UICorner")
+    DScrollCorner.CornerRadius = UDim.new(0, 6)
+    DScrollCorner.Parent = DrawerScroll
+
+    local DrawerLayout = Instance.new("UIListLayout")
+    DrawerLayout.Padding = UDim.new(0, 3)
+    DrawerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    DrawerLayout.Parent = DrawerScroll
+
+    DrawerLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        DrawerScroll.CanvasSize = UDim2.new(0, 0, 0, DrawerLayout.AbsoluteContentSize.Y + 8)
+    end)
+
+    ----------------------------------------------------------------------------
+    -- POPULATE DRAWER LOGIC
+    ----------------------------------------------------------------------------
+    local function populateDrawer(itemType, query)
+        for _, child in ipairs(DrawerScroll:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+
+        local isEmote = (itemType == "Emote")
+        DrawerTitle.Text = isEmote and string.format("Evade Emotes Catalog (%d)", #State.Emotes.List)
+                                   or string.format("Evade Unusuals Catalog (%d)", #State.Unusuals.List)
+
+        local targetList = isEmote and State.Emotes.List or State.Unusuals.List
+        local qClean = cleanName(query or "")
+        local catFilter = State.ActiveCategoryFilter
+
+        for _, item in ipairs(targetList) do
+            local catClean = cleanName(item.Category or "")
+            local passCat = (catFilter == "All") or (item.Category == catFilter)
+            local passSearch = (qClean == "")
+                or item.CleanDisplay:find(qClean, 1, true)
+                or item.CleanName:find(qClean, 1, true)
+                or catClean:find(qClean, 1, true)
+
+            if passCat and passSearch then
+                local Row = Instance.new("Frame")
+                Row.Size = UDim2.new(1, -6, 0, 28)
+                Row.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+                Row.Parent = DrawerScroll
+
+                local RCorner = Instance.new("UICorner")
+                RCorner.CornerRadius = UDim.new(0, 4)
+                RCorner.Parent = Row
+
+                -- In-Game Status Dot
+                local StatusDot = Instance.new("Frame")
+                StatusDot.Size = UDim2.new(0, 6, 0, 6)
+                StatusDot.Position = UDim2.new(0, 6, 0.5, -3)
+                StatusDot.BackgroundColor3 = item.InGame and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(80, 80, 80)
+                StatusDot.Parent = Row
+
+                local DotCorner = Instance.new("UICorner")
+                DotCorner.CornerRadius = UDim.new(1, 0)
+                DotCorner.Parent = StatusDot
+
+                local NameLbl = Instance.new("TextLabel")
+                NameLbl.Size = UDim2.new(1, -170, 1, 0)
+                NameLbl.Position = UDim2.new(0, 16, 0, 0)
+                NameLbl.BackgroundTransparency = 1
+                NameLbl.Text = item.DisplayName
+                NameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+                NameLbl.Font = Helvetica
+                NameLbl.TextSize = 11
+                NameLbl.TextXAlignment = Enum.TextXAlignment.Left
+                NameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+                NameLbl.Parent = Row
+
+                -- Category Badge
+                local CatBadge = Instance.new("TextLabel")
+                CatBadge.Size = UDim2.new(0, 60, 0, 16)
+                CatBadge.Position = UDim2.new(1, -150, 0.5, -8)
+                CatBadge.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                CatBadge.Text = item.Category or "Store"
+                CatBadge.TextColor3 = Color3.fromRGB(180, 180, 180)
+                CatBadge.Font = Helvetica
+                CatBadge.TextSize = 9
+                CatBadge.TextTruncate = Enum.TextTruncate.AtEnd
+                CatBadge.Parent = Row
+
+                local CatCorner = Instance.new("UICorner")
+                CatCorner.CornerRadius = UDim.new(0, 3)
+                CatCorner.Parent = CatBadge
+
+                -- Set Original Button
+                local SetOrig = Instance.new("TextButton")
+                SetOrig.Size = UDim2.new(0, 40, 0, 20)
+                SetOrig.Position = UDim2.new(1, -86, 0.5, -10)
+                SetOrig.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                SetOrig.Text = "Orig"
+                SetOrig.TextColor3 = Color3.fromRGB(255, 255, 255)
+                SetOrig.Font = HelveticaBold
+                SetOrig.TextSize = 9
+                SetOrig.Parent = Row
+
+                local SetOrigCorner = Instance.new("UICorner")
+                SetOrigCorner.CornerRadius = UDim.new(0, 4)
+                SetOrigCorner.Parent = SetOrig
+
+                -- Set Target Button
+                local SetRep = Instance.new("TextButton")
+                SetRep.Size = UDim2.new(0, 40, 0, 20)
+                SetRep.Position = UDim2.new(1, -43, 0.5, -10)
+                SetRep.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                SetRep.Text = "Target"
+                SetRep.TextColor3 = Color3.fromRGB(0, 0, 0)
+                SetRep.Font = HelveticaBold
+                SetRep.TextSize = 9
+                SetRep.Parent = Row
+
+                local SetRepCorner = Instance.new("UICorner")
+                SetRepCorner.CornerRadius = UDim.new(0, 4)
+                SetRepCorner.Parent = SetRep
+
+                SetOrig.MouseButton1Click:Connect(function()
+                    if isEmote then
+                        EmoteOrigBox.Text = item.DisplayName
+                        EmoteStatus.Text = "Original Emote selected: " .. item.DisplayName
+                        EmoteStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    else
+                        UnusualOrigBox.Text = item.DisplayName
+                        UnusualStatus.Text = "Original Unusual selected: " .. item.DisplayName
+                        UnusualStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    end
+                end)
+
+                SetRep.MouseButton1Click:Connect(function()
+                    if isEmote then
+                        EmoteRepBox.Text = item.DisplayName
+                        EmoteStatus.Text = "Target Emote selected: " .. item.DisplayName
+                        EmoteStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    else
+                        UnusualRepBox.Text = item.DisplayName
+                        UnusualStatus.Text = "Target Unusual selected: " .. item.DisplayName
+                        UnusualStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    end
+                end)
+            end
+        end
+    end
+
+    -- Setup Filter Chips in Drawer
+    local function setupFilterChips(itemType)
+        for _, child in ipairs(FilterScroll:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+
+        local categories = { "All" }
+        if itemType == "Emote" then
+            table.insert(categories, "Store")
+            table.insert(categories, "Gamepasses")
+            table.insert(categories, "Daily Shop")
+            table.insert(categories, "Halloween")
+            table.insert(categories, "Winter Holidays")
+            table.insert(categories, "Summer")
+            table.insert(categories, "Spring")
+            table.insert(categories, "Special")
+            table.insert(categories, "Other")
+        else
+            table.insert(categories, "Daily Shop")
+            table.insert(categories, "Halloween")
+            table.insert(categories, "Winter Holidays")
+            table.insert(categories, "Gamepasses")
+            table.insert(categories, "Summer")
+            table.insert(categories, "Special")
+            table.insert(categories, "Valentines")
+            table.insert(categories, "Staff Exclusive")
+            table.insert(categories, "Other")
+        end
+
+        for _, cat in ipairs(categories) do
+            local Chip = Instance.new("TextButton")
+            Chip.Size = UDim2.new(0, 0, 1, 0)
+            Chip.AutomaticSize = Enum.AutomaticSize.X
+            Chip.BackgroundColor3 = (State.ActiveCategoryFilter == cat) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(28, 28, 28)
+            Chip.Text = "  " .. cat .. "  "
+            Chip.TextColor3 = (State.ActiveCategoryFilter == cat) and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(160, 160, 160)
+            Chip.Font = Helvetica
+            Chip.TextSize = 10
+            Chip.Parent = FilterScroll
+
+            local CCorner = Instance.new("UICorner")
+            CCorner.CornerRadius = UDim.new(0, 4)
+            CCorner.Parent = Chip
+
+            Chip.MouseButton1Click:Connect(function()
+                State.ActiveCategoryFilter = cat
+                setupFilterChips(itemType)
+                populateDrawer(itemType, SearchBox.Text)
+            end)
+        end
+    end
+
+    SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        populateDrawer(State.ActiveTab == "Unusuals" and "Unusual" or "Emote", SearchBox.Text)
+    end)
+
+    EmotePickerBtn.MouseButton1Click:Connect(function()
+        if Drawer.Visible and State.ActiveTab == "Emotes" then
+            Drawer.Visible = false
+        else
+            Drawer.Visible = true
+            State.ActiveCategoryFilter = "All"
+            setupFilterChips("Emote")
+            populateDrawer("Emote", SearchBox.Text)
+        end
+    end)
+
+    UnusualPickerBtn.MouseButton1Click:Connect(function()
+        if Drawer.Visible and State.ActiveTab == "Unusuals" then
+            Drawer.Visible = false
+        else
+            Drawer.Visible = true
+            State.ActiveCategoryFilter = "All"
+            setupFilterChips("Unusual")
+            populateDrawer("Unusual", SearchBox.Text)
+        end
+    end)
+
+    ----------------------------------------------------------------------------
+    -- TAB NAVIGATION LOGIC
+    ----------------------------------------------------------------------------
+    local function switchTab(tabName)
+        State.ActiveTab = tabName
+
+        EmotesView.Visible = (tabName == "Emotes")
+        UnusualsView.Visible = (tabName == "Unusuals")
+        SwapsView.Visible = (tabName == "Swaps")
+
+        EmotesTabBtn.BackgroundColor3 = (tabName == "Emotes") and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(26, 26, 26)
+        EmotesTabBtn.TextColor3 = (tabName == "Emotes") and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(160, 160, 160)
+
+        UnusualsTabBtn.BackgroundColor3 = (tabName == "Unusuals") and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(26, 26, 26)
+        UnusualsTabBtn.TextColor3 = (tabName == "Unusuals") and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(160, 160, 160)
+
+        SwapsTabBtn.BackgroundColor3 = (tabName == "Swaps") and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(26, 26, 26)
+        SwapsTabBtn.TextColor3 = (tabName == "Swaps") and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(160, 160, 160)
+
+        if Drawer.Visible then
+            if tabName == "Emotes" then
+                setupFilterChips("Emote")
+                populateDrawer("Emote", SearchBox.Text)
+            elseif tabName == "Unusuals" then
+                setupFilterChips("Unusual")
+                populateDrawer("Unusual", SearchBox.Text)
+            else
+                Drawer.Visible = false
+            end
+        end
+    end
+
+    EmotesTabBtn.MouseButton1Click:Connect(function() switchTab("Emotes") end)
+    UnusualsTabBtn.MouseButton1Click:Connect(function() switchTab("Unusuals") end)
+    SwapsTabBtn.MouseButton1Click:Connect(function() switchTab("Swaps") end)
+
+    ----------------------------------------------------------------------------
+    -- REFRESH SWAPS LISTS (Mini lists & Master list)
+    ----------------------------------------------------------------------------
+    local function refreshAllSwapsUI()
+        -- 1. Refresh Emotes Mini Scroll List
+        for _, child in ipairs(EmoteScrollList:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+
+        local eCount = 0
+        for clean, swap in pairs(State.Emotes.Map) do
+            eCount = eCount + 1
+            local Row = Instance.new("Frame")
+            Row.Size = UDim2.new(1, -8, 0, 28)
+            Row.BackgroundColor3 = Color3.fromRGB(26, 26, 26)
+            Row.Parent = EmoteScrollList
+
+            local RCorner = Instance.new("UICorner")
+            RCorner.CornerRadius = UDim.new(0, 4)
+            RCorner.Parent = Row
+
+            local RowText = Instance.new("TextLabel")
+            RowText.Size = UDim2.new(1, -65, 1, 0)
+            RowText.Position = UDim2.new(0, 8, 0, 0)
+            RowText.BackgroundTransparency = 1
+            RowText.Text = string.format("%s ➔ %s", swap.Orig.DisplayName, swap.Rep.DisplayName)
+            RowText.TextColor3 = Color3.fromRGB(255, 255, 255)
+            RowText.Font = Helvetica
+            RowText.TextSize = 11
+            RowText.TextXAlignment = Enum.TextXAlignment.Left
+            RowText.TextTruncate = Enum.TextTruncate.AtEnd
+            RowText.Parent = Row
+
+            local RevBtn = Instance.new("TextButton")
+            RevBtn.Size = UDim2.new(0, 50, 0, 20)
+            RevBtn.Position = UDim2.new(1, -54, 0.5, -10)
+            RevBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            RevBtn.Text = "Reset"
+            RevBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            RevBtn.Font = HelveticaBold
+            RevBtn.TextSize = 10
+            RevBtn.Parent = Row
+
+            local RevCorner = Instance.new("UICorner")
+            RevCorner.CornerRadius = UDim.new(0, 4)
+            RevCorner.Parent = RevBtn
+
+            RevBtn.MouseButton1Click:Connect(function()
+                restoreEmote(clean)
+                refreshAllSwapsUI()
+                EmoteStatus.Text = string.format("Emote '%s' reset to default!", swap.Orig.DisplayName)
+                EmoteStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end)
+        end
+
+        if eCount == 0 then
+            EmoteStatus.Text = "Status: No active emote swaps."
+            EmoteStatus.TextColor3 = Color3.fromRGB(160, 160, 160)
+        end
+
+        -- 2. Refresh Unusuals Mini Scroll List
+        for _, child in ipairs(UnusualScrollList:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+
+        local uCount = 0
+        for clean, swap in pairs(State.Unusuals.Map) do
+            uCount = uCount + 1
+            local Row = Instance.new("Frame")
+            Row.Size = UDim2.new(1, -8, 0, 28)
+            Row.BackgroundColor3 = Color3.fromRGB(26, 26, 26)
+            Row.Parent = UnusualScrollList
+
+            local RCorner = Instance.new("UICorner")
+            RCorner.CornerRadius = UDim.new(0, 4)
+            RCorner.Parent = Row
+
+            local RowText = Instance.new("TextLabel")
+            RowText.Size = UDim2.new(1, -65, 1, 0)
+            RowText.Position = UDim2.new(0, 8, 0, 0)
+            RowText.BackgroundTransparency = 1
+            RowText.Text = string.format("%s ➔ %s", swap.Orig.DisplayName, swap.Rep.DisplayName)
+            RowText.TextColor3 = Color3.fromRGB(255, 255, 255)
+            RowText.Font = Helvetica
+            RowText.TextSize = 11
+            RowText.TextXAlignment = Enum.TextXAlignment.Left
+            RowText.TextTruncate = Enum.TextTruncate.AtEnd
+            RowText.Parent = Row
+
+            local RevBtn = Instance.new("TextButton")
+            RevBtn.Size = UDim2.new(0, 50, 0, 20)
+            RevBtn.Position = UDim2.new(1, -54, 0.5, -10)
+            RevBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            RevBtn.Text = "Reset"
+            RevBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            RevBtn.Font = HelveticaBold
+            RevBtn.TextSize = 10
+            RevBtn.Parent = Row
+
+            local RevCorner = Instance.new("UICorner")
+            RevCorner.CornerRadius = UDim.new(0, 4)
+            RevCorner.Parent = RevBtn
+
+            RevBtn.MouseButton1Click:Connect(function()
+                restoreUnusual(clean)
+                refreshAllSwapsUI()
+                UnusualStatus.Text = string.format("Unusual '%s' reset to default!", swap.Orig.DisplayName)
+                UnusualStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end)
+        end
+
+        if uCount == 0 then
+            UnusualStatus.Text = "Status: No active unusual swaps."
+            UnusualStatus.TextColor3 = Color3.fromRGB(160, 160, 160)
+        end
+
+        -- 3. Refresh Master Overview List
+        for _, child in ipairs(MasterScrollList:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+
+        local totalSwaps = eCount + uCount
+        SwapsTabBtn.Text = string.format("🔄 Active Swaps (%d)", totalSwaps)
+
+        -- Master entries for Emotes
+        for clean, swap in pairs(State.Emotes.Map) do
+            local Row = Instance.new("Frame")
+            Row.Size = UDim2.new(1, -8, 0, 30)
+            Row.BackgroundColor3 = Color3.fromRGB(26, 26, 26)
+            Row.Parent = MasterScrollList
+
+            local RCorner = Instance.new("UICorner")
+            RCorner.CornerRadius = UDim.new(0, 4)
+            RCorner.Parent = Row
+
+            local Tag = Instance.new("TextLabel")
+            Tag.Size = UDim2.new(0, 58, 0, 18)
+            Tag.Position = UDim2.new(0, 6, 0.5, -9)
+            Tag.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            Tag.Text = "EMOTE"
+            Tag.TextColor3 = Color3.fromRGB(0, 0, 0)
+            Tag.Font = HelveticaBold
+            Tag.TextSize = 9
+            Tag.Parent = Row
+
+            local TCorner = Instance.new("UICorner")
+            TCorner.CornerRadius = UDim.new(0, 3)
+            TCorner.Parent = Tag
+
+            local RowText = Instance.new("TextLabel")
+            RowText.Size = UDim2.new(1, -135, 1, 0)
+            RowText.Position = UDim2.new(0, 70, 0, 0)
+            RowText.BackgroundTransparency = 1
+            RowText.Text = string.format("%s ➔ %s", swap.Orig.DisplayName, swap.Rep.DisplayName)
+            RowText.TextColor3 = Color3.fromRGB(255, 255, 255)
+            RowText.Font = Helvetica
+            RowText.TextSize = 11
+            RowText.TextXAlignment = Enum.TextXAlignment.Left
+            RowText.TextTruncate = Enum.TextTruncate.AtEnd
+            RowText.Parent = Row
+
+            local RevBtn = Instance.new("TextButton")
+            RevBtn.Size = UDim2.new(0, 52, 0, 22)
+            RevBtn.Position = UDim2.new(1, -56, 0.5, -11)
+            RevBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            RevBtn.Text = "Reset"
+            RevBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            RevBtn.Font = HelveticaBold
+            RevBtn.TextSize = 10
+            RevBtn.Parent = Row
+
+            local RevCorner = Instance.new("UICorner")
+            RevCorner.CornerRadius = UDim.new(0, 4)
+            RevCorner.Parent = RevBtn
+
+            RevBtn.MouseButton1Click:Connect(function()
+                restoreEmote(clean)
+                refreshAllSwapsUI()
+            end)
+        end
+
+        -- Master entries for Unusuals
+        for clean, swap in pairs(State.Unusuals.Map) do
+            local Row = Instance.new("Frame")
+            Row.Size = UDim2.new(1, -8, 0, 30)
+            Row.BackgroundColor3 = Color3.fromRGB(26, 26, 26)
+            Row.Parent = MasterScrollList
+
+            local RCorner = Instance.new("UICorner")
+            RCorner.CornerRadius = UDim.new(0, 4)
+            RCorner.Parent = Row
+
+            local Tag = Instance.new("TextLabel")
+            Tag.Size = UDim2.new(0, 58, 0, 18)
+            Tag.Position = UDim2.new(0, 6, 0.5, -9)
+            Tag.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            Tag.Text = "UNUSUAL"
+            Tag.TextColor3 = Color3.fromRGB(255, 255, 255)
+            Tag.Font = HelveticaBold
+            Tag.TextSize = 9
+            Tag.Parent = Row
+
+            local TCorner = Instance.new("UICorner")
+            TCorner.CornerRadius = UDim.new(0, 3)
+            TCorner.Parent = Tag
+
+            local RowText = Instance.new("TextLabel")
+            RowText.Size = UDim2.new(1, -135, 1, 0)
+            RowText.Position = UDim2.new(0, 70, 0, 0)
+            RowText.BackgroundTransparency = 1
+            RowText.Text = string.format("%s ➔ %s", swap.Orig.DisplayName, swap.Rep.DisplayName)
+            RowText.TextColor3 = Color3.fromRGB(255, 255, 255)
+            RowText.Font = Helvetica
+            RowText.TextSize = 11
+            RowText.TextXAlignment = Enum.TextXAlignment.Left
+            RowText.TextTruncate = Enum.TextTruncate.AtEnd
+            RowText.Parent = Row
+
+            local RevBtn = Instance.new("TextButton")
+            RevBtn.Size = UDim2.new(0, 52, 0, 22)
+            RevBtn.Position = UDim2.new(1, -56, 0.5, -11)
+            RevBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            RevBtn.Text = "Reset"
+            RevBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            RevBtn.Font = HelveticaBold
+            RevBtn.TextSize = 10
+            RevBtn.Parent = Row
+
+            local RevCorner = Instance.new("UICorner")
+            RevCorner.CornerRadius = UDim.new(0, 4)
+            RevCorner.Parent = RevBtn
+
+            RevBtn.MouseButton1Click:Connect(function()
+                restoreUnusual(clean)
+                refreshAllSwapsUI()
+            end)
+        end
+    end
+
+    ----------------------------------------------------------------------------
+    -- BUTTON ACTIONS & BINDINGS
+    ----------------------------------------------------------------------------
+    -- Emote Swap Action
+    EmoteSwapBtn.MouseButton1Click:Connect(function()
+        local origText = EmoteOrigBox.Text:gsub("^%s*(.-)%s*$", "%1")
+        local repText = EmoteRepBox.Text:gsub("^%s*(.-)%s*$", "%1")
+
+        if origText == "" or repText == "" then
+            EmoteStatus.Text = "Error: Please enter both Original and Target emotes!"
+            EmoteStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+            return
+        end
+
+        local origItem = resolveItem("Emote", origText)
+        local repItem = resolveItem("Emote", repText)
+
+        if not origItem then
+            EmoteStatus.Text = string.format("Error: Original emote '%s' not recognized!", origText)
+            EmoteStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+            return
+        end
+        if not repItem then
+            EmoteStatus.Text = string.format("Error: Replacement emote '%s' not recognized!", repText)
+            EmoteStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+            return
+        end
+
+        local ok, err = physicalSwapEmote(origItem, repItem)
+        if ok then
+            refreshAllSwapsUI()
+            EmoteStatus.Text = string.format("Swap Success: %s ➔ %s", origItem.DisplayName, repItem.DisplayName)
+            EmoteStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            EmoteStatus.Text = "Swap Failed: " .. tostring(err)
+            EmoteStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end
+    end)
+
+    -- Unusual Swap Action
+    UnusualSwapBtn.MouseButton1Click:Connect(function()
+        local origText = UnusualOrigBox.Text:gsub("^%s*(.-)%s*$", "%1")
+        local repText = UnusualRepBox.Text:gsub("^%s*(.-)%s*$", "%1")
+
+        if origText == "" or repText == "" then
+            UnusualStatus.Text = "Error: Please enter both Original and Target unusuals!"
+            UnusualStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+            return
+        end
+
+        local origItem = resolveItem("Unusual", origText)
+        local repItem = resolveItem("Unusual", repText)
+
+        if not origItem then
+            UnusualStatus.Text = string.format("Error: Original unusual '%s' not recognized!", origText)
+            UnusualStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+            return
+        end
+        if not repItem then
+            UnusualStatus.Text = string.format("Error: Replacement unusual '%s' not recognized!", repText)
+            UnusualStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+            return
+        end
+
+        local ok, err = physicalSwapUnusual(origItem, repItem)
+        if ok then
+            refreshAllSwapsUI()
+            UnusualStatus.Text = string.format("Swap Success: %s ➔ %s", origItem.DisplayName, repItem.DisplayName)
+            UnusualStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            UnusualStatus.Text = "Swap Failed: " .. tostring(err)
+            UnusualStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end
+    end)
+
+    -- Toggle Emotes System
+    EmoteToggleBtn.MouseButton1Click:Connect(function()
+        State.Emotes.Enabled = not State.Emotes.Enabled
+        if State.Emotes.Enabled then
+            EmoteToggleBtn.Text = "Status: ENABLED"
+            EmoteToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            EmoteToggleBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+            EmoteStatus.Text = "Emote swap system ENABLED."
+            EmoteStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            EmoteToggleBtn.Text = "Status: DISABLED"
+            EmoteToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            EmoteToggleBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
+            restoreAllEmotes()
+            refreshAllSwapsUI()
+            EmoteStatus.Text = "Emote swap system DISABLED (All restored)."
+            EmoteStatus.TextColor3 = Color3.fromRGB(180, 180, 180)
+        end
+    end)
+
+    -- Toggle Unusuals System
+    UnusualToggleBtn.MouseButton1Click:Connect(function()
+        State.Unusuals.Enabled = not State.Unusuals.Enabled
+        if State.Unusuals.Enabled then
+            UnusualToggleBtn.Text = "Status: ENABLED"
+            UnusualToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            UnusualToggleBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+            UnusualStatus.Text = "Unusual swap system ENABLED."
+            UnusualStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            UnusualToggleBtn.Text = "Status: DISABLED"
+            UnusualToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            UnusualToggleBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
+            restoreAllUnusuals()
+            refreshAllSwapsUI()
+            UnusualStatus.Text = "Unusual swap system DISABLED (All restored)."
+            UnusualStatus.TextColor3 = Color3.fromRGB(180, 180, 180)
+        end
+    end)
+
+    -- Reset Buttons
+    EmoteResetAllBtn.MouseButton1Click:Connect(function()
+        restoreAllEmotes()
+        refreshAllSwapsUI()
+        EmoteStatus.Text = "ALL emotes successfully reset to default!"
+        EmoteStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end)
+
+    UnusualResetAllBtn.MouseButton1Click:Connect(function()
+        restoreAllUnusuals()
+        refreshAllSwapsUI()
+        UnusualStatus.Text = "ALL unusuals successfully reset to default!"
+        UnusualStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end)
+
+    MasterResetBtn.MouseButton1Click:Connect(function()
+        restoreEverything()
+        refreshAllSwapsUI()
+        EmoteStatus.Text = "All cosmetics reset to default."
+        UnusualStatus.Text = "All cosmetics reset to default."
+    end)
+
+    -- Minimize Window Action
+    local minimized = false
+    MinBtn.MouseButton1Click:Connect(function()
+        minimized = not minimized
+        TabBar.Visible = not minimized
+        Content.Visible = not minimized
+        Drawer.Visible = false
+        Main.Size = minimized and UDim2.new(0, 420, 0, 46) or UDim2.new(0, 420, 0, 550)
+        MinBtn.Text = minimized and "+" or "-"
+    end)
+
+    -- Keybind: RightControl to Toggle GUI Visibility
+    local inputConn = UserInputService.InputBegan:Connect(function(input, gpe)
+        if not gpe and input.KeyCode == Enum.KeyCode.RightControl then
+            ScreenGui.Enabled = not ScreenGui.Enabled
+        end
+    end)
+    table.insert(getgenv()._CosmeticConnections, inputConn)
+
+    return ScreenGui
+end
+
+--------------------------------------------------------------------------------
+-- RE-APPLY ON CHARACTER RESPAWN
+--------------------------------------------------------------------------------
+local charConn = LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    if State.Emotes.Enabled then
+        for _, swap in pairs(State.Emotes.Map) do
+            physicalSwapEmote(swap.Orig, swap.Rep)
+        end
+    end
+    if State.Unusuals.Enabled then
+        for _, swap in pairs(State.Unusuals.Map) do
+            physicalSwapUnusual(swap.Orig, swap.Rep)
+        end
+        refreshRig()
+    end
+end)
+table.insert(getgenv()._CosmeticConnections, charConn)
+
+--------------------------------------------------------------------------------
+-- INITIALIZE & EXPOSE PUBLIC APIS
+--------------------------------------------------------------------------------
+local GUI = buildGUI()
+
+-- Unified API
+getgenv().CosmeticChanger = {
+    SwapEmote = function(origName, repName)
+        local orig = resolveItem("Emote", origName)
+        local rep = resolveItem("Emote", repName)
+        if orig and rep then return physicalSwapEmote(orig, rep) end
+        return false, "Could not resolve emote names."
+    end,
+    SwapUnusual = function(origName, repName)
+        local orig = resolveItem("Unusual", origName)
+        local rep = resolveItem("Unusual", repName)
+        if orig and rep then return physicalSwapUnusual(orig, rep) end
+        return false, "Could not resolve unusual names."
+    end,
+    RestoreEmote = restoreEmote,
+    RestoreUnusual = restoreUnusual,
+    RestoreAllEmotes = restoreAllEmotes,
+    RestoreAllUnusuals = restoreAllUnusuals,
+    RestoreEverything = restoreEverything,
+    RefreshRig = refreshRig,
+    Rescan = scanGameCosmetics,
+    GetEmotes = function() return State.Emotes.List end,
+    GetUnusuals = function() return State.Unusuals.List end,
+    GetGUI = function() return GUI end
+}
+
+-- Backward Compatibility APIs
+getgenv().EmoteChanger = {
+    Swap = getgenv().CosmeticChanger.SwapEmote,
+    Restore = restoreEmote,
+    RestoreAll = restoreAllEmotes,
+    GetAllEmotes = function() return State.Emotes.List end,
+    GetActiveSwaps = function() return State.Emotes.Map end,
+    GetGUI = function() return GUI end
+}
+
+getgenv().UnusualChanger = {
+    Swap = getgenv().CosmeticChanger.SwapUnusual,
+    Restore = restoreUnusual,
+    RestoreAll = restoreAllUnusuals,
+    GetAllUnusuals = function() return State.Unusuals.List end,
+    GetActiveSwaps = function() return State.Unusuals.Map end,
+    GetGUI = function() return GUI end,
+    RefreshRig = refreshRig
+}
+
+print("=====================================================================")
+print("[ Universal Cosmetic Swapper v4.1] Loaded Successfully!")
+print(string.format("  • Emotes Catalog: %d total (%d in game memory)", #State.Emotes.List, (function() local c = 0 for _, x in ipairs(State.Emotes.List) do if x.InGame then c = c + 1 end end return c end)()))
+print(string.format("  • Unusuals Catalog: %d total (%d in game memory)", #State.Unusuals.List, (function() local c = 0 for _, x in ipairs(State.Unusuals.List) do if x.InGame then c = c + 1 end end return c end)()))
+print("  • Press RightControl to toggle UI visibility.")
+print("=====================================================================")
